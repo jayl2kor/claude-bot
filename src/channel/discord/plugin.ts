@@ -8,12 +8,18 @@ import {
 	type Message as DiscordMessage,
 	Events,
 	GatewayIntentBits,
+	type Interaction,
 	Partials,
+	REST,
+	Routes,
+	SlashCommandBuilder,
 } from "discord.js";
 import type {
 	ChannelChatMessage,
 	ChannelPlugin,
+	CommandInteraction,
 	IncomingMessage,
+	SlashCommand,
 } from "../../plugins/types.js";
 import { logger } from "../../utils/logger.js";
 import { splitMessage } from "../../utils/text.js";
@@ -38,6 +44,10 @@ export function createDiscordPlugin(
 	});
 
 	let messageHandler: ((msg: IncomingMessage) => Promise<void>) | null = null;
+	// biome-ignore lint/style/useLet: reassigned in onCommand
+	let commandHandler:
+		| ((interaction: CommandInteraction) => Promise<void>)
+		| null = null;
 
 	return {
 		id: "discord",
@@ -121,6 +131,85 @@ export function createDiscordPlugin(
 
 		onMessage(handler) {
 			messageHandler = handler;
+		},
+
+		async registerCommands(commands: SlashCommand[]) {
+			if (!client.user) return;
+
+			const rest = new REST().setToken(config.token);
+			const builders = commands.map((cmd) => {
+				const b = new SlashCommandBuilder()
+					.setName(cmd.name)
+					.setDescription(cmd.description);
+				for (const opt of cmd.options ?? []) {
+					if (opt.type === "string") {
+						b.addStringOption((o) =>
+							o
+								.setName(opt.name)
+								.setDescription(opt.description)
+								.setRequired(opt.required),
+						);
+					} else if (opt.type === "integer") {
+						b.addIntegerOption((o) =>
+							o
+								.setName(opt.name)
+								.setDescription(opt.description)
+								.setRequired(opt.required),
+						);
+					}
+				}
+				return b.toJSON();
+			});
+
+			try {
+				await rest.put(Routes.applicationCommands(client.user.id), {
+					body: builders,
+				});
+				logger.info("Slash commands registered", { count: commands.length });
+			} catch (err) {
+				logger.error("Failed to register slash commands", {
+					error: String(err),
+				});
+			}
+
+			// Listen for interactions
+			client.on(Events.InteractionCreate, async (interaction: Interaction) => {
+				if (!interaction.isChatInputCommand() || !commandHandler) return;
+
+				const ci: CommandInteraction = {
+					commandName: interaction.commandName,
+					channelId: interaction.channelId,
+					userId: interaction.user.id,
+					userName: interaction.user.displayName ?? interaction.user.username,
+					options: Object.fromEntries(
+						interaction.options.data.map((o) => [
+							o.name,
+							o.value as string | number,
+						]),
+					),
+					reply: (content) =>
+						interaction.reply({ content, ephemeral: false }).then(() => {}),
+					deferReply: () => interaction.deferReply().then(() => {}),
+					editReply: (content) =>
+						interaction.editReply({ content }).then(() => {}),
+				};
+
+				try {
+					await commandHandler(ci);
+				} catch (err) {
+					logger.error("Slash command handler error", { error: String(err) });
+					if (!interaction.replied && !interaction.deferred) {
+						await interaction.reply({
+							content: "처리 중 에러가 발생했습니다.",
+							ephemeral: true,
+						});
+					}
+				}
+			});
+		},
+
+		onCommand(handler) {
+			commandHandler = handler;
 		},
 
 		async sendMessage(channelId, content, replyTo) {

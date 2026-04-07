@@ -19,5 +19,5 @@
     "noImplicitReturns": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "data"]
+  "exclude": ["node_modules", "dist", "data", "src/**/*.test.ts"]
 }

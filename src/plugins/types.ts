@@ -24,6 +24,28 @@ export type IncomingMessage = {
 	recentMessages?: ChannelChatMessage[];
 };
 
+export type SlashCommand = {
+	name: string;
+	description: string;
+	options?: Array<{
+		name: string;
+		description: string;
+		type: "string" | "integer";
+		required: boolean;
+	}>;
+};
+
+export type CommandInteraction = {
+	commandName: string;
+	channelId: string;
+	userId: string;
+	userName: string;
+	options: Record<string, string | number>;
+	reply: (content: string) => Promise<void>;
+	deferReply: () => Promise<void>;
+	editReply: (content: string) => Promise<void>;
+};
+
 export type ChannelPlugin = {
 	readonly id: string;
 	readonly meta: { label: string; textChunkLimit: number };
@@ -33,6 +55,12 @@ export type ChannelPlugin = {
 
 	/** Register handler for incoming messages. */
 	onMessage(handler: (msg: IncomingMessage) => Promise<void>): void;
+
+	/** Register slash commands. */
+	registerCommands?(commands: SlashCommand[]): Promise<void>;
+
+	/** Register handler for slash command interactions. */
+	onCommand?(handler: (interaction: CommandInteraction) => Promise<void>): void;
 
 	/** Send a text message to a channel. */
 	sendMessage(

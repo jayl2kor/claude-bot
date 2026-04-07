@@ -142,10 +142,12 @@ export async function runDaemon(
 			contextBuilder,
 			relationships,
 			knowledge,
+			reflections,
 			integrator,
 			plugins,
 		});
 		router.start();
+		await router.startCommands();
 
 		// 10. Initialize and start cron service
 		const cronService = new CronService();

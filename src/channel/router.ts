@@ -6,9 +6,11 @@
  * routes to sessions, and sends responses back.
  */
 
+import { handleMemorySearch } from "../commands/memory-search.js";
 import type { ContextBuilder } from "../context/builder.js";
 import type { ResultMessage } from "../executor/types.js";
 import type { KnowledgeManager } from "../memory/knowledge.js";
+import type { ReflectionManager } from "../memory/reflection.js";
 import type { RelationshipManager } from "../memory/relationships.js";
 import type { ChannelPlugin, IncomingMessage } from "../plugins/types.js";
 import { BoundedUUIDSet } from "../session/dedup.js";
@@ -23,6 +25,7 @@ export type MessageRouterDeps = {
 	contextBuilder: ContextBuilder;
 	relationships: RelationshipManager;
 	knowledge: KnowledgeManager;
+	reflections: ReflectionManager;
 	integrator: SessionIntegrator;
 	plugins: ChannelPlugin[];
 };
@@ -37,6 +40,43 @@ export class MessageRouter {
 		for (const plugin of this.deps.plugins) {
 			plugin.onMessage((msg) => this.handleMessage(plugin, msg));
 			logger.info("Router registered", { channel: plugin.id });
+		}
+	}
+
+	/** Register slash commands on all plugins that support them. */
+	async startCommands(): Promise<void> {
+		const commands = [
+			{
+				name: "기억",
+				description: "과거 대화와 지식을 검색합니다",
+				options: [
+					{
+						name: "keyword",
+						description: "검색할 키워드",
+						type: "string" as const,
+						required: true,
+					},
+				],
+			},
+		];
+
+		for (const plugin of this.deps.plugins) {
+			if (plugin.registerCommands) {
+				await plugin.registerCommands(commands);
+				plugin.onCommand?.((interaction) => this.handleCommand(interaction));
+			}
+		}
+	}
+
+	private async handleCommand(
+		interaction: import("../plugins/types.js").CommandInteraction,
+	): Promise<void> {
+		if (interaction.commandName === "기억") {
+			await handleMemorySearch(interaction, {
+				knowledge: this.deps.knowledge,
+				reflections: this.deps.reflections,
+				relationships: this.deps.relationships,
+			});
 		}
 	}
 
