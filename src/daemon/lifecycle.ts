@@ -9,6 +9,7 @@ import { createCliPlugin } from "../channel/cli/plugin.js";
 import { createDiscordPlugin } from "../channel/discord/plugin.js";
 import { MessageRouter } from "../channel/router.js";
 import { createTelegramPlugin } from "../channel/telegram/plugin.js";
+import { CollaborationManager } from "../collaboration/manager.js";
 import { ContextBuilder } from "../context/builder.js";
 import { createBuiltinJobs } from "../cron/jobs.js";
 import { CronService } from "../cron/service.js";
@@ -160,7 +161,22 @@ export async function runDaemon(
 		router.start();
 		await router.startCommands();
 
-		// 10. Initialize and start cron service
+		// 10. Initialize collaboration (optional)
+		const collabConfig = config.daemon.collaboration;
+		const collaboration = collabConfig.enabled
+			? new CollaborationManager({
+					petId: config.persona.name,
+					role: collabConfig.role,
+					sharedDir: resolve(
+						collabConfig.sharedDir ??
+							resolve(DATA_DIR, "..", "shared", "tasks"),
+					),
+					skipPermissions: config.daemon.skipPermissions,
+					model: config.daemon.claudeModel,
+				})
+			: undefined;
+
+		// 11. Initialize and start cron service
 		const cronService = new CronService();
 		for (const job of createBuiltinJobs({
 			persona: personaManager,
@@ -170,6 +186,7 @@ export async function runDaemon(
 			sessionStore,
 			activityTracker,
 			history,
+			collaboration,
 			plugins,
 		})) {
 			cronService.add(job);

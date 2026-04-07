@@ -34,6 +34,12 @@ const GitConfigSchema = z.object({
 	autoSync: z.boolean().default(false),
 });
 
+const CollaborationConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	role: z.string().default("general"),
+	sharedDir: z.string().optional(),
+});
+
 const DaemonConfigSchema = z.object({
 	maxConcurrentSessions: z.number().default(10),
 	sessionTimeoutMs: z.number().default(30 * 60 * 1000),
@@ -43,6 +49,7 @@ const DaemonConfigSchema = z.object({
 	skipPermissions: z.boolean().default(false),
 	workspacePath: z.string().optional(),
 	git: GitConfigSchema.default({}),
+	collaboration: CollaborationConfigSchema.default({}),
 });
 
 export const AppConfigSchema = z.object({

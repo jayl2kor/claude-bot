@@ -22,6 +22,7 @@ services:
     volumes:
       - ./config/coboonge:/app/config/coboonge:ro
       - coboonge-data:/app/data/coboonge
+      - shared-tasks:/app/data/shared/tasks
       - ${WORKSPACE_PATH:-.}:/workspace
       - ${CLAUDE_AUTH_PATH:-${HOME}/.claude}:/home/node/.claude:ro
     command: ["--pet", "coboonge"]
@@ -32,6 +33,7 @@ services:
     volumes:
       - ./config/reboong:/app/config/reboong:ro
       - reboong-data:/app/data/reboong
+      - shared-tasks:/app/data/shared/tasks
       - ${WORKSPACE_PATH:-.}:/workspace
       - ${CLAUDE_AUTH_PATH:-${HOME}/.claude}:/home/node/.claude:ro
     command: ["--pet", "reboong"]
@@ -39,3 +41,4 @@ services:
 volumes:
   coboonge-data:
   reboong-data:
+  shared-tasks:
