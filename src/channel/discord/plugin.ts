@@ -10,7 +10,11 @@ import {
 	GatewayIntentBits,
 	Partials,
 } from "discord.js";
-import type { ChannelPlugin, IncomingMessage } from "../../plugins/types.js";
+import type {
+	ChannelChatMessage,
+	ChannelPlugin,
+	IncomingMessage,
+} from "../../plugins/types.js";
 import { logger } from "../../utils/logger.js";
 import { splitMessage } from "../../utils/text.js";
 
@@ -51,17 +55,23 @@ export function createDiscordPlugin(
 
 			client.on(Events.MessageCreate, async (msg: DiscordMessage) => {
 				if (!messageHandler) return;
-				if (msg.author.bot) return;
 
-				// Filter by respondTo config
+				// Ignore own messages
+				if (msg.author.id === client.user?.id) return;
+
 				const isDM = !msg.guild;
 				const isMention = msg.mentions.has(client.user!);
+				const isFromBot = msg.author.bot;
 
-				if (config.respondTo === "mention" && !isMention && !isDM) return;
-				if (config.respondTo === "dm" && !isDM) return;
-				// "both" accepts DMs and mentions
+				// Bots can trigger us only via direct mention
+				if (isFromBot && !isMention) return;
 
-				if (!isDM && !isMention) return;
+				// Human messages: filter by respondTo config
+				if (!isFromBot) {
+					if (config.respondTo === "mention" && !isMention && !isDM) return;
+					if (config.respondTo === "dm" && !isDM) return;
+					if (!isDM && !isMention) return;
+				}
 
 				// Strip bot mention from content
 				let content = msg.content;
@@ -73,6 +83,23 @@ export function createDiscordPlugin(
 
 				if (!content) return;
 
+				// Fetch recent channel messages for conversation context
+				let recentMessages: ChannelChatMessage[] = [];
+				try {
+					const history = await msg.channel.messages.fetch({
+						limit: 10,
+						before: msg.id,
+					});
+					recentMessages = [...history.values()].reverse().map((m) => ({
+						userName: m.author.displayName ?? m.author.username,
+						content: m.content.slice(0, 300),
+						isBot: m.author.bot,
+						timestamp: m.createdTimestamp,
+					}));
+				} catch {
+					// Channel history not available (DM partial, permissions)
+				}
+
 				const incoming: IncomingMessage = {
 					id: msg.id,
 					userId: msg.author.id,
@@ -81,6 +108,7 @@ export function createDiscordPlugin(
 					content,
 					timestamp: msg.createdTimestamp,
 					replyTo: msg.reference?.messageId ?? undefined,
+					recentMessages,
 				};
 
 				try {

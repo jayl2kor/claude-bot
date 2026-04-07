@@ -10,6 +10,7 @@ import type { KnowledgeManager } from "../memory/knowledge.js";
 import type { PersonaManager } from "../memory/persona.js";
 import type { ReflectionManager } from "../memory/reflection.js";
 import type { RelationshipManager } from "../memory/relationships.js";
+import type { ChannelChatMessage } from "../plugins/types.js";
 
 export type ContextBuilderDeps = {
 	persona: PersonaManager;
@@ -61,6 +62,7 @@ export class ContextBuilder {
 		userId: string,
 		_channelId: string,
 		recentQuery?: string,
+		recentMessages?: ChannelChatMessage[],
 	): Promise<string> {
 		// Parallel I/O — all four sections are independent
 		const [personaSection, relSection, knowledgeSection, reflectionSection] =
@@ -91,7 +93,17 @@ export class ContextBuilder {
 			);
 		}
 
-		// 5. Meta instructions
+		// 5. Recent channel conversation context
+		if (recentMessages && recentMessages.length > 0) {
+			const chatLines = ["# 최근 채널 대화 (이전 메시지들)"];
+			for (const m of recentMessages) {
+				const tag = m.isBot ? "(봇)" : "";
+				chatLines.push(`${m.userName}${tag}: ${m.content}`);
+			}
+			sections.push(chatLines.join("\n"));
+		}
+
+		// 6. Meta instructions
 		sections.push(buildMetaInstructions());
 
 		return sections.join("\n\n");

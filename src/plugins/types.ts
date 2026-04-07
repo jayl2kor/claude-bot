@@ -5,6 +5,13 @@
  * Simplified from OpenClaw's 20+ adapters to 4 essential ones.
  */
 
+export type ChannelChatMessage = {
+	userName: string;
+	content: string;
+	isBot: boolean;
+	timestamp: number;
+};
+
 export type IncomingMessage = {
 	id: string;
 	userId: string;
@@ -13,6 +20,8 @@ export type IncomingMessage = {
 	content: string;
 	timestamp: number;
 	replyTo?: string;
+	/** Recent channel messages for conversation context. */
+	recentMessages?: ChannelChatMessage[];
 };
 
 export type ChannelPlugin = {
@@ -26,7 +35,11 @@ export type ChannelPlugin = {
 	onMessage(handler: (msg: IncomingMessage) => Promise<void>): void;
 
 	/** Send a text message to a channel. */
-	sendMessage(channelId: string, content: string, replyTo?: string): Promise<void>;
+	sendMessage(
+		channelId: string,
+		content: string,
+		replyTo?: string,
+	): Promise<void>;
 
 	/** Show typing indicator. */
 	sendTyping(channelId: string): Promise<void>;

@@ -75,11 +75,12 @@ export class MessageRouter {
 			});
 		}
 
-		// Build system prompt with persona + memory
+		// Build system prompt with persona + memory + channel context
 		const systemPrompt = await this.deps.contextBuilder.build(
 			msg.userId,
 			msg.channelId,
 			msg.content,
+			msg.recentMessages,
 		);
 
 		// Check if already processing a message for this user+channel
