@@ -26,7 +26,7 @@ services:
       - coboonge-workspace:/workspace
       - shared-tasks:/app/data/shared/tasks
       - shared-status:/app/data/shared/status
-      - ${CLAUDE_AUTH_PATH:-${HOME}/.claude}:/home/node/.claude
+      - ${CLAUDE_AUTH_PATH:-${HOME}/.claude}:/root/.claude
     command: ["--pet", "coboonge"]
 
   reboong:
@@ -38,7 +38,7 @@ services:
       - reboong-workspace:/workspace
       - shared-tasks:/app/data/shared/tasks
       - shared-status:/app/data/shared/status
-      - ${CLAUDE_AUTH_PATH:-${HOME}/.claude}:/home/node/.claude
+      - ${CLAUDE_AUTH_PATH:-${HOME}/.claude}:/root/.claude
     command: ["--pet", "reboong"]
 
 volumes:
