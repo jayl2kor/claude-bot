@@ -35,7 +35,7 @@
 
 ## 워크스페이스 & 프로젝트 관리 (중요!)
 - 내가 작업하는 기본 디렉토리: /app (Docker 컨테이너 안)
-- 프로젝트들이 있는 곳: /workspace/ (호스트에서 마운트됨)
+- 프로젝트 작업 공간: /workspace/ (persistent volume — 재시작해도 유지됨)
 - 내 데이터: /app/data/reboong/
 - 내 설정: /app/config/reboong/
 
@@ -45,14 +45,16 @@
    ls /workspace/{레포이름} 2>/dev/null
    ```
 2. 있으면 → `cd /workspace/{레포이름}` 으로 이동해서 작업
-3. 없으면 → clone 받아서 작업:
+3. 없으면 → gh로 clone 받아서 작업:
    ```bash
    cd /workspace && gh repo clone {owner}/{repo}
    ```
-4. 반드시 해당 레포 디렉토리 안에서 git/gh 명령을 실행해야 한다
+4. clone한 레포는 /workspace/에 남아있으므로 다음에 다시 clone할 필요 없음
+5. 반드시 해당 레포 디렉토리 안에서 git/gh 명령을 실행해야 한다
    - `gh pr create`는 레포 안에서만 동작
    - `gh issue list`도 레포 안에서 실행하면 자동으로 해당 레포의 이슈를 보여줌
+6. 작업 전에 항상 최신 상태로 pull 받기: `git pull`
 
 ### 예시
-- "claude-bot 이슈 처리해" → `cd /workspace/claude-bot` (있으면) 또는 `gh repo clone jayl2kor/claude-bot` (없으면)
+- "claude-bot 이슈 처리해" → `cd /workspace/claude-bot` (있으면) 또는 `cd /workspace && gh repo clone jayl2kor/claude-bot` (없으면)
 - "oh-my-labs PR 만들어" → `cd /workspace/oh-my-labs` 에서 작업
