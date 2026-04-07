@@ -12,6 +12,7 @@ import { createTelegramPlugin } from "../channel/telegram/plugin.js";
 import { ContextBuilder } from "../context/builder.js";
 import { createBuiltinJobs } from "../cron/jobs.js";
 import { CronService } from "../cron/service.js";
+import { ActivityTracker } from "../memory/activity.js";
 import { KnowledgeManager } from "../memory/knowledge.js";
 import { PersonaManager } from "../memory/persona.js";
 import { ReflectionManager } from "../memory/reflection.js";
@@ -86,6 +87,9 @@ export async function runDaemon(
 		const reflections = new ReflectionManager(
 			resolve(DATA_DIR, "memory", "reflections"),
 		);
+		const activityTracker = new ActivityTracker(
+			resolve(DATA_DIR, "memory", "activity"),
+		);
 
 		// 4. Initialize context builder
 		const contextBuilder = new ContextBuilder({
@@ -143,6 +147,7 @@ export async function runDaemon(
 			relationships,
 			knowledge,
 			reflections,
+			activityTracker,
 			integrator,
 			plugins,
 		});
@@ -157,6 +162,7 @@ export async function runDaemon(
 			reflections,
 			relationships,
 			sessionStore,
+			activityTracker,
 			plugins,
 		})) {
 			cronService.add(job);

@@ -8,6 +8,8 @@
  */
 
 import { spawnClaude } from "../executor/spawner.js";
+import { analyzeActivity } from "../memory/activity-analyzer.js";
+import type { ActivityTracker } from "../memory/activity.js";
 import type { KnowledgeManager } from "../memory/knowledge.js";
 import type { PersonaManager } from "../memory/persona.js";
 import type { ReflectionManager } from "../memory/reflection.js";
@@ -23,6 +25,7 @@ export type CronJobDeps = {
 	reflections: ReflectionManager;
 	relationships: RelationshipManager;
 	sessionStore: SessionStore;
+	activityTracker: ActivityTracker;
 	plugins: ChannelPlugin[];
 };
 
@@ -55,6 +58,12 @@ export function createBuiltinJobs(deps: CronJobDeps): CronJob[] {
 			intervalMs: TWENTY_FOUR_HOURS,
 			runOnStart: true,
 			handler: () => runSessionCleanup(deps),
+		},
+		{
+			id: "activity-monitor",
+			intervalMs: 10 * 60 * 1000, // 10 minutes
+			runOnStart: false,
+			handler: () => runActivityMonitor(deps),
 		},
 	];
 }
@@ -232,5 +241,47 @@ async function runSessionCleanup(deps: CronJobDeps): Promise<void> {
 			cleaned,
 			remaining: keys.length - cleaned,
 		});
+	}
+}
+
+/**
+ * Activity monitor — check active users and send proactive care messages.
+ */
+async function runActivityMonitor(deps: CronJobDeps): Promise<void> {
+	const activeUsers = await deps.activityTracker.listActiveUsers();
+	if (activeUsers.length === 0) return;
+
+	for (const record of activeUsers) {
+		const analysis = analyzeActivity(record);
+		if (!analysis.shouldAlert || !analysis.suggestion) continue;
+
+		// Find the channel to send the message
+		// Use the relationship to find which channel this user is on
+		const rel = await deps.relationships.get(record.userId);
+		if (!rel) continue;
+
+		// Send via first available plugin
+		for (const plugin of deps.plugins) {
+			try {
+				// We don't know the exact channelId, but we can use a recent session
+				const sessions = await deps.sessionStore.list();
+				const userSession = sessions.find((k) => k.startsWith(record.userId));
+				if (!userSession) continue;
+
+				const sessionRecord = await deps.sessionStore.read(userSession);
+				if (!sessionRecord) continue;
+
+				await plugin.sendMessage(sessionRecord.channelId, analysis.suggestion);
+				await deps.activityTracker.markAlerted(record.userId, Date.now());
+				logger.info("Activity alert sent", {
+					userId: record.userId,
+					isLateNight: analysis.isLateNight,
+					sessionMinutes: analysis.sessionDurationMinutes,
+				});
+				break; // Only send once per user
+			} catch (err) {
+				logger.warn("Failed to send activity alert", { error: String(err) });
+			}
+		}
 	}
 }

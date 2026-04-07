@@ -9,6 +9,7 @@
 import { handleMemorySearch } from "../commands/memory-search.js";
 import type { ContextBuilder } from "../context/builder.js";
 import type { ResultMessage } from "../executor/types.js";
+import type { ActivityTracker } from "../memory/activity.js";
 import type { KnowledgeManager } from "../memory/knowledge.js";
 import type { ReflectionManager } from "../memory/reflection.js";
 import type { RelationshipManager } from "../memory/relationships.js";
@@ -26,6 +27,7 @@ export type MessageRouterDeps = {
 	relationships: RelationshipManager;
 	knowledge: KnowledgeManager;
 	reflections: ReflectionManager;
+	activityTracker: ActivityTracker;
 	integrator: SessionIntegrator;
 	plugins: ChannelPlugin[];
 };
@@ -94,6 +96,11 @@ export class MessageRouter {
 			userName: msg.userName,
 			contentLength: msg.content.length,
 		});
+
+		// Record activity for monitoring
+		void this.deps.activityTracker
+			.recordActivity(msg.userId, msg.timestamp)
+			.catch(() => {});
 
 		// Show typing indicator
 		void plugin.sendTyping(msg.channelId).catch(() => {});
