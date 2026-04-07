@@ -12,6 +12,7 @@ import type { PersonaManager } from "../memory/persona.js";
 import type { ReflectionManager } from "../memory/reflection.js";
 import type { RelationshipManager } from "../memory/relationships.js";
 import type { ChannelChatMessage } from "../plugins/types.js";
+import type { StatusReader } from "../status/reader.js";
 
 export type ContextBuilderDeps = {
 	persona: PersonaManager;
@@ -19,6 +20,7 @@ export type ContextBuilderDeps = {
 	knowledge: KnowledgeManager;
 	reflections: ReflectionManager;
 	history?: ChatHistoryManager;
+	statusReader?: StatusReader;
 };
 
 /** Rough token estimate: ~4 chars per token for English, ~2 for Korean. */
@@ -81,6 +83,7 @@ export class ContextBuilder {
 			knowledgeSection,
 			reflectionSection,
 			historyResults,
+			statusSection,
 		] = await Promise.all([
 			this.deps.persona.toPromptSection(),
 			this.deps.relationships.toPromptSection(userId),
@@ -89,6 +92,7 @@ export class ContextBuilder {
 				: Promise.resolve(null),
 			this.deps.reflections.toPromptSection(3),
 			historyPromise,
+			this.deps.statusReader?.toPromptSection() ?? Promise.resolve(null),
 		]);
 
 		const sections: string[] = [];
@@ -129,7 +133,12 @@ export class ContextBuilder {
 			sections.push(truncateToTokenBudget(histLines.join("\n"), 800));
 		}
 
-		// 7. Meta instructions
+		// 7. Other pets' status
+		if (statusSection) {
+			sections.push(truncateToTokenBudget(statusSection, 400));
+		}
+
+		// 8. Meta instructions
 		sections.push(buildMetaInstructions());
 
 		return sections.join("\n\n");

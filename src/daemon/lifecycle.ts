@@ -22,6 +22,8 @@ import { RelationshipManager } from "../memory/relationships.js";
 import type { ChannelPlugin } from "../plugins/types.js";
 import { SessionManager } from "../session/manager.js";
 import { SessionStore } from "../session/store.js";
+import { StatusReader } from "../status/reader.js";
+import { StatusWriter } from "../status/writer.js";
 import { SessionIntegrator } from "../teaching/integrator.js";
 import type { AppConfig } from "../utils/config.js";
 import { logger } from "../utils/logger.js";
@@ -96,13 +98,21 @@ export async function runDaemon(
 			resolve(DATA_DIR, "memory", "history"),
 		);
 
-		// 4. Initialize context builder
+		// 4. Initialize context builder (statusReader added after session manager)
+		const sharedStatusDir = config.daemon.sharedStatusDir
+			? resolve(config.daemon.sharedStatusDir)
+			: undefined;
+		const statusReader = sharedStatusDir
+			? new StatusReader(sharedStatusDir, config.persona.name)
+			: undefined;
+
 		const contextBuilder = new ContextBuilder({
 			persona: personaManager,
 			relationships,
 			knowledge,
 			history,
 			reflections,
+			statusReader,
 		});
 
 		// 5. Initialize session manager
@@ -115,6 +125,16 @@ export async function runDaemon(
 			storeDir: resolve(DATA_DIR, "sessions"),
 			workspacePath: config.daemon.workspacePath,
 		});
+
+		// 5b. Initialize status writer (optional)
+		const statusWriter = sharedStatusDir
+			? new StatusWriter(
+					sharedStatusDir,
+					config.persona.name,
+					config.persona.name,
+					sessionManager,
+				)
+			: undefined;
 
 		// 6. Initialize channel plugins
 		const plugins: ChannelPlugin[] = [];
@@ -191,6 +211,14 @@ export async function runDaemon(
 		})) {
 			cronService.add(job);
 		}
+		if (statusWriter) {
+			cronService.add({
+				id: "status-heartbeat",
+				intervalMs: 15_000,
+				runOnStart: true,
+				handler: () => statusWriter.write(),
+			});
+		}
 		await cronService.start(signal);
 
 		// 11. Write initial pointer
@@ -242,8 +270,9 @@ export async function runDaemon(
 		// Then shutdown sessions (SIGTERM → wait → SIGKILL)
 		await sessionManager.shutdown();
 
-		// Clear pointer on clean shutdown
+		// Clear pointer and status on clean shutdown
 		await pointer.clear();
+		await statusWriter?.clear();
 
 		// Brief pause for pending writes
 		await sleep(500);

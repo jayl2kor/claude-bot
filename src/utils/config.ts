@@ -48,6 +48,7 @@ const DaemonConfigSchema = z.object({
 	maxTurns: z.number().default(10),
 	skipPermissions: z.boolean().default(false),
 	workspacePath: z.string().optional(),
+	sharedStatusDir: z.string().optional(),
 	git: GitConfigSchema.default({}),
 	collaboration: CollaborationConfigSchema.default({}),
 });

@@ -176,6 +176,28 @@ export class SessionManager {
 		return [...this.activeSessions.keys()];
 	}
 
+	/** Get snapshots of all active sessions for status sharing. */
+	getSessionSnapshots(): Array<{
+		userId: string;
+		channelId: string;
+		currentActivity: {
+			type: string;
+			summary: string;
+			timestamp: number;
+		} | null;
+		startedAt: number;
+	}> {
+		return [...this.activeSessions.entries()].map(([key, handle]) => {
+			const parts = key.split(":");
+			return {
+				userId: parts[0] ?? "",
+				channelId: parts[1] ?? "",
+				currentActivity: handle.currentActivity,
+				startedAt: Number(parts[2]) || Date.now(),
+			};
+		});
+	}
+
 	private handleSessionDone(
 		sessionKey: string,
 		status: "completed" | "failed" | "interrupted",
