@@ -100,7 +100,9 @@ export async function runDaemon(
 			maxConcurrentSessions: config.daemon.maxConcurrentSessions,
 			sessionTimeoutMs: config.daemon.sessionTimeoutMs,
 			claudeModel: config.daemon.claudeModel,
+			maxTurns: config.daemon.maxTurns,
 			storeDir: resolve(DATA_DIR, "sessions"),
+			workspacePath: config.daemon.workspacePath,
 		});
 
 		// 6. Initialize channel plugins

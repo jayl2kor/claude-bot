@@ -17,9 +17,14 @@ async function main() {
 	}
 
 	const petId = parsePetId();
-	const configDir = petId ? resolve("config", petId) : resolve("config");
-	const dataDir = petId ? resolve("data", petId) : resolve("data");
-	const envFile = petId ? resolve(`.env.${petId}`) : resolve(".env");
+	const root = process.env.CLAUDE_PET_ROOT ?? process.cwd();
+	const configDir = petId
+		? resolve(root, "config", petId)
+		: resolve(root, "config");
+	const dataDir = petId ? resolve(root, "data", petId) : resolve(root, "data");
+	const envFile = petId
+		? resolve(root, `.env.${petId}`)
+		: resolve(root, ".env");
 
 	logger.info("claude-pet starting", { petId: petId ?? "default" });
 

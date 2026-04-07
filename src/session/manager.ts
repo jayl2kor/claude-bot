@@ -18,7 +18,9 @@ export type SessionManagerConfig = {
 	maxConcurrentSessions: number;
 	sessionTimeoutMs: number;
 	claudeModel: string;
+	maxTurns: number;
 	storeDir: string;
+	workspacePath?: string;
 };
 
 export type OnSessionTextCallback = (sessionKey: string, text: string) => void;
@@ -66,8 +68,8 @@ export class SessionManager {
 	}
 
 	/**
-	 * Get existing session or create a new one.
-	 * If at capacity, returns null.
+	 * Spawn a new claude session for every message.
+	 * Returns null only when at global capacity.
 	 */
 	async getOrCreate(
 		userId: string,
@@ -77,14 +79,7 @@ export class SessionManager {
 	): Promise<SessionHandle | null> {
 		const key = SessionManager.sessionKey(userId, channelId);
 
-		// Reuse active session — write prompt to stdin
-		const existing = this.activeSessions.get(key);
-		if (existing) {
-			this.resetTimeout(key);
-			return existing;
-		}
-
-		// Capacity check
+		// Capacity check — global across all users
 		if (this.activeSessions.size >= this.config.maxConcurrentSessions) {
 			logger.warn("At session capacity", {
 				active: this.activeSessions.size,
@@ -98,19 +93,23 @@ export class SessionManager {
 			prompt,
 			systemPrompt,
 			model: this.config.claudeModel,
-			maxTurns: 1,
+			maxTurns: this.config.maxTurns,
+			cwd: this.config.workspacePath,
 		};
 
 		const handle = spawnClaude(spawnOpts);
 
+		// Use unique session key per spawn to allow concurrent sessions per user
+		const sessionKey = `${key}:${Date.now()}`;
+
 		// Wire up text callback
 		handle.onText((text) => {
-			this.onTextCallback?.(key, text);
+			this.onTextCallback?.(sessionKey, text);
 		});
 
 		// Track session
-		this.activeSessions.set(key, handle);
-		this.scheduleTimeout(key);
+		this.activeSessions.set(sessionKey, handle);
+		this.scheduleTimeout(sessionKey);
 
 		// Persist session record
 		const now = Date.now();
@@ -126,11 +125,13 @@ export class SessionManager {
 		await this.store.write(key, newRecord);
 
 		// Handle session completion
-		void handle.done.then((status) => this.handleSessionDone(key, status));
+		void handle.done.then((status) =>
+			this.handleSessionDone(sessionKey, status),
+		);
 
 		logger.info("Session started", {
-			key,
-			resumed: !!record?.claudeSessionId,
+			key: sessionKey,
+			active: this.activeSessions.size,
 		});
 
 		return handle;
@@ -221,10 +222,6 @@ export class SessionManager {
 		}, this.config.sessionTimeoutMs);
 
 		this.sessionTimers.set(key, timer);
-	}
-
-	private resetTimeout(key: string): void {
-		this.scheduleTimeout(key);
 	}
 
 	private clearTimeout(key: string): void {

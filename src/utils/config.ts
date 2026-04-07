@@ -28,11 +28,20 @@ const ChannelsConfigSchema = z.object({
 	telegram: TelegramConfigSchema.optional(),
 });
 
+const GitConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	branch: z.string().optional(),
+	autoSync: z.boolean().default(false),
+});
+
 const DaemonConfigSchema = z.object({
 	maxConcurrentSessions: z.number().default(10),
 	sessionTimeoutMs: z.number().default(30 * 60 * 1000),
 	pointerRefreshMs: z.number().default(5 * 60 * 1000),
 	claudeModel: z.string().default("sonnet"),
+	maxTurns: z.number().default(10),
+	workspacePath: z.string().optional(),
+	git: GitConfigSchema.default({}),
 });
 
 export const AppConfigSchema = z.object({
@@ -69,24 +78,27 @@ export async function loadConfig(
 		}
 	}
 
-	// Parse with lenient channel handling — strip channels with empty tokens
-	const config = AppConfigSchema.parse(raw);
-
-	// Remove channels where token resolved to empty string
-	if (config.channels.discord && !config.channels.discord.token) {
-		config.channels.discord = undefined;
+	// Strip channels whose token resolved to an empty string before Zod validation.
+	// This handles the case where ${ENV_VAR} substitutes to "" (unset variable).
+	const channelsRaw = raw.channels as Record<string, unknown> | undefined;
+	if (channelsRaw && typeof channelsRaw === "object") {
+		for (const channelKey of ["discord", "telegram"] as const) {
+			const ch = channelsRaw[channelKey] as Record<string, unknown> | undefined;
+			if (ch && typeof ch === "object" && !ch.token) {
+				delete channelsRaw[channelKey];
+			}
+		}
 	}
-	if (config.channels.telegram && !config.channels.telegram.token) {
-		config.channels.telegram = undefined;
-	}
 
-	return config;
+	return AppConfigSchema.parse(raw);
 }
 
 /** Replace ${ENV_VAR} patterns with environment variable values. */
 function substituteEnvVars(content: string): string {
 	return content.replace(/\$\{(\w+)\}/g, (_, varName: string) => {
-		return process.env[varName] ?? "";
+		// Use quoted empty string so YAML parses it as "" rather than null
+		const value = process.env[varName];
+		return value !== undefined ? value : '""';
 	});
 }
 
