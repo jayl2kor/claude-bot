@@ -1,4 +1,7 @@
 #!/bin/sh
+# Use node's home so Claude CLI finds the mounted .claude/ config
+export HOME=/home/node
+
 # Ensure pre-installed plugins are available
 PLUGIN_DIR="$HOME/.claude/plugins/marketplaces"
 mkdir -p "$PLUGIN_DIR" 2>/dev/null || true
