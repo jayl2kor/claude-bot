@@ -6,6 +6,7 @@
  */
 
 import { type ChildProcess, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
@@ -34,6 +35,8 @@ export type SpawnOptions = {
 	maxTurns?: number;
 	/** Working directory for the claude process */
 	cwd?: string;
+	/** Skip permission prompts (dangerous — use only in trusted environments) */
+	skipPermissions?: boolean;
 };
 
 export type SessionHandle = {
@@ -202,6 +205,7 @@ function buildArgs(opts: SpawnOptions): {
 		"--output-format",
 		"stream-json",
 		"--verbose",
+		...(opts.skipPermissions ? ["--dangerously-skip-permissions"] : []),
 	];
 
 	if (opts.model) {
@@ -216,7 +220,7 @@ function buildArgs(opts: SpawnOptions): {
 	if (opts.systemPrompt) {
 		const tmpDir = resolve("data", "state", "tmp");
 		mkdirSync(tmpDir, { recursive: true });
-		tmpFile = join(tmpDir, `sysprompt-${Date.now()}.md`);
+		tmpFile = join(tmpDir, `sysprompt-${randomUUID()}.md`);
 		writeFileSync(tmpFile, opts.systemPrompt, "utf8");
 		args.push("--system-prompt-file", tmpFile);
 	}

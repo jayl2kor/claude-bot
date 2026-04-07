@@ -35,7 +35,7 @@ export class GitSync {
 		return this.config.enabled && !!this.config.branch;
 	}
 
-	/** Initialize: checkout pet branch and pull latest. */
+	/** Initialize: checkout pet branch and sync. */
 	async init(): Promise<void> {
 		if (!this.enabled) return;
 
@@ -48,26 +48,17 @@ export class GitSync {
 			}
 
 			if (this.config.autoSync) {
-				await git(this.workspacePath, ["pull", "--rebase", "origin", "main"]).catch(() => {
-					logger.warn("Git: pull --rebase failed, continuing with local state");
-				});
+				await this.syncFromMain();
 			}
 		} catch (err) {
 			logger.error("Git init failed", { error: String(err) });
 		}
 	}
 
-	/** Pre-session: pull latest from main. */
+	/** Pre-session: sync latest from main. */
 	async preSession(): Promise<void> {
 		if (!this.enabled || !this.config.autoSync) return;
-
-		try {
-			await git(this.workspacePath, ["fetch", "origin"]);
-			await git(this.workspacePath, ["rebase", "origin/main"]);
-			logger.debug("Git: rebased on origin/main");
-		} catch (err) {
-			logger.warn("Git pre-session sync failed", { error: String(err) });
-		}
+		await this.syncFromMain();
 	}
 
 	/** Post-session: commit and push changes. */
@@ -76,7 +67,7 @@ export class GitSync {
 
 		try {
 			const status = await git(this.workspacePath, ["status", "--porcelain"]);
-			if (!status) return; // No changes
+			if (!status) return;
 
 			await git(this.workspacePath, ["add", "-A"]);
 			const commitMsg = message ?? `pet/${this.petId}: auto-commit`;
@@ -85,6 +76,19 @@ export class GitSync {
 			logger.info("Git: committed and pushed", { branch: this.config.branch });
 		} catch (err) {
 			logger.warn("Git post-session sync failed", { error: String(err) });
+		}
+	}
+
+	/** Shared sync: fetch and rebase on origin/main. */
+	private async syncFromMain(): Promise<void> {
+		try {
+			await git(this.workspacePath, ["fetch", "origin"]);
+			await git(this.workspacePath, ["rebase", "origin/main"]);
+			logger.debug("Git: rebased on origin/main");
+		} catch (err) {
+			logger.warn("Git sync from main failed, continuing with local state", {
+				error: String(err),
+			});
 		}
 	}
 }

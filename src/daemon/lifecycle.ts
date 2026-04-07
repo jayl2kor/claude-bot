@@ -101,6 +101,7 @@ export async function runDaemon(
 			sessionTimeoutMs: config.daemon.sessionTimeoutMs,
 			claudeModel: config.daemon.claudeModel,
 			maxTurns: config.daemon.maxTurns,
+			skipPermissions: config.daemon.skipPermissions,
 			storeDir: resolve(DATA_DIR, "sessions"),
 			workspacePath: config.daemon.workspacePath,
 		});

@@ -40,6 +40,7 @@ const DaemonConfigSchema = z.object({
 	pointerRefreshMs: z.number().default(5 * 60 * 1000),
 	claudeModel: z.string().default("sonnet"),
 	maxTurns: z.number().default(10),
+	skipPermissions: z.boolean().default(false),
 	workspacePath: z.string().optional(),
 	git: GitConfigSchema.default({}),
 });

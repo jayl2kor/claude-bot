@@ -1,41 +1,40 @@
+x-pet-base: &pet-base
+  build: .
+  environment:
+    CLAUDE_PET_ROOT: /app
+  init: true
+  restart: unless-stopped
+  cap_drop:
+    - NET_RAW
+    - NET_ADMIN
+  security_opt:
+    - no-new-privileges:true
+  deploy:
+    resources:
+      limits:
+        memory: 2g
+        cpus: "1.5"
+
 services:
   coboonge:
-    build: .
+    <<: *pet-base
     env_file: .env.coboonge
-    environment:
-      CLAUDE_PET_ROOT: /app
     volumes:
       - ./config/coboonge:/app/config/coboonge:ro
       - coboonge-data:/app/data/coboonge
       - ${WORKSPACE_PATH:-.}:/workspace
-      - ${HOME}/.claude:/home/node/.claude:ro
+      - ${CLAUDE_AUTH_PATH:-${HOME}/.claude}:/home/node/.claude:ro
     command: ["--pet", "coboonge"]
-    init: true
-    restart: unless-stopped
-    cap_drop:
-      - NET_RAW
-      - NET_ADMIN
-    security_opt:
-      - no-new-privileges:true
 
   reboong:
-    build: .
+    <<: *pet-base
     env_file: .env.reboong
-    environment:
-      CLAUDE_PET_ROOT: /app
     volumes:
       - ./config/reboong:/app/config/reboong:ro
       - reboong-data:/app/data/reboong
       - ${WORKSPACE_PATH:-.}:/workspace
-      - ${HOME}/.claude:/home/node/.claude:ro
+      - ${CLAUDE_AUTH_PATH:-${HOME}/.claude}:/home/node/.claude:ro
     command: ["--pet", "reboong"]
-    init: true
-    restart: unless-stopped
-    cap_drop:
-      - NET_RAW
-      - NET_ADMIN
-    security_opt:
-      - no-new-privileges:true
 
 volumes:
   coboonge-data:

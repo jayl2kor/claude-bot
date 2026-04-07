@@ -83,18 +83,7 @@ export class MessageRouter {
 			msg.recentMessages,
 		);
 
-		// Check if already processing a message for this user+channel
-		const sessionKey = `${msg.userId}:${msg.channelId}`;
-		if (this.deps.sessionManager.isActive(sessionKey)) {
-			await plugin.sendMessage(
-				msg.channelId,
-				"형님, 지금 이전 요청 처리 중입니다! 잠시만 기다려주십시오 🫡",
-				msg.id,
-			);
-			return;
-		}
-
-		// Get or create session
+		// Spawn a new session for every message
 		const handle = await this.deps.sessionManager.getOrCreate(
 			msg.userId,
 			msg.channelId,
@@ -105,21 +94,21 @@ export class MessageRouter {
 		if (!handle) {
 			await plugin.sendMessage(
 				msg.channelId,
-				"형님, 지금 다른 분 요청을 처리하고 있어서 용량이 꽉 찼습니다. 잠시 후 다시 말씀해주십시오!",
+				"형님, 지금 다른 작업 처리 중이라 이건 못 하겠습니다. 잠시 후 다시 말씀해주십시오!",
 				msg.id,
 			);
 			return;
 		}
 
 		// Stream text responses as they arrive (don't wait for done)
-		const sentTexts: string[] = [];
+		const sentTexts = new Set<string>();
+		let lastSentText = "";
 
 		handle.onText((text) => {
-			// Only send if we have genuinely new text
-			if (text && !sentTexts.includes(text)) {
-				sentTexts.push(text);
-				// First message replies to user, subsequent are standalone
-				const replyTo = sentTexts.length === 1 ? msg.id : undefined;
+			if (text && !sentTexts.has(text)) {
+				sentTexts.add(text);
+				lastSentText = text;
+				const replyTo = sentTexts.size === 1 ? msg.id : undefined;
 				void plugin.sendMessage(msg.channelId, text, replyTo).catch((err) => {
 					logger.warn("Failed to send streamed text", { error: String(err) });
 				});
@@ -136,12 +125,12 @@ export class MessageRouter {
 		const status = await handle.done;
 
 		// If onText never fired, fall back to result text
-		if (sentTexts.length === 0 && status === "completed" && resultText) {
+		if (sentTexts.size === 0 && status === "completed" && resultText) {
 			await plugin.sendMessage(msg.channelId, resultText, msg.id);
-			sentTexts.push(resultText);
+			lastSentText = resultText;
 		}
 
-		if (status === "failed" && sentTexts.length === 0) {
+		if (status === "failed" && sentTexts.size === 0) {
 			const errHint = handle.lastStderr.slice(-3).join("\n");
 			logger.error("Session failed", { userId: msg.userId, stderr: errHint });
 			await plugin.sendMessage(
@@ -152,10 +141,15 @@ export class MessageRouter {
 		}
 
 		// Post-session integration (fire and forget)
-		const finalText = resultText || sentTexts[sentTexts.length - 1] || "";
+		const finalText = resultText || lastSentText;
 		if (finalText) {
+			const integrationKey = `${msg.userId}:${msg.channelId}`;
 			void this.deps.integrator
-				.integrate(sessionKey, msg.userId, `${msg.content}\n---\n${finalText}`)
+				.integrate(
+					integrationKey,
+					msg.userId,
+					`${msg.content}\n---\n${finalText}`,
+				)
 				.catch((err) => {
 					logger.warn("Post-session integration failed", {
 						error: String(err),

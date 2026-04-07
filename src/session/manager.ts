@@ -19,6 +19,7 @@ export type SessionManagerConfig = {
 	sessionTimeoutMs: number;
 	claudeModel: string;
 	maxTurns: number;
+	skipPermissions: boolean;
 	storeDir: string;
 	workspacePath?: string;
 };
@@ -95,6 +96,7 @@ export class SessionManager {
 			model: this.config.claudeModel,
 			maxTurns: this.config.maxTurns,
 			cwd: this.config.workspacePath,
+			skipPermissions: this.config.skipPermissions,
 		};
 
 		const handle = spawnClaude(spawnOpts);
@@ -175,16 +177,20 @@ export class SessionManager {
 	}
 
 	private handleSessionDone(
-		key: string,
+		sessionKey: string,
 		status: "completed" | "failed" | "interrupted",
 	): void {
-		const handle = this.activeSessions.get(key);
+		const handle = this.activeSessions.get(sessionKey);
 
-		// Persist claude session ID for future resume
+		// Extract base key (userId:channelId) from timestamped sessionKey
+		const parts = sessionKey.split(":");
+		const baseKey = parts.length >= 3 ? `${parts[0]}:${parts[1]}` : sessionKey;
+
+		// Persist claude session ID for future reference
 		if (handle?.claudeSessionId) {
-			void this.store.read(key).then((record) => {
+			void this.store.read(baseKey).then((record) => {
 				if (record) {
-					void this.store.write(key, {
+					void this.store.write(baseKey, {
 						...record,
 						claudeSessionId: handle.claudeSessionId,
 						lastActivityAt: Date.now(),
@@ -193,16 +199,16 @@ export class SessionManager {
 			});
 		}
 
-		this.activeSessions.delete(key);
+		this.activeSessions.delete(sessionKey);
 
-		const timer = this.sessionTimers.get(key);
+		const timer = this.sessionTimers.get(sessionKey);
 		if (timer) {
 			clearTimeout(timer);
-			this.sessionTimers.delete(key);
+			this.sessionTimers.delete(sessionKey);
 		}
 
-		logger.info("Session ended", { key, status });
-		this.onDoneCallback?.(key, status);
+		logger.info("Session ended", { key: sessionKey, status });
+		this.onDoneCallback?.(sessionKey, status);
 	}
 
 	private scheduleTimeout(key: string): void {
