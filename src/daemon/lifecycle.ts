@@ -13,6 +13,7 @@ import { ContextBuilder } from "../context/builder.js";
 import { createBuiltinJobs } from "../cron/jobs.js";
 import { CronService } from "../cron/service.js";
 import { ActivityTracker } from "../memory/activity.js";
+import { ChatHistoryManager } from "../memory/history.js";
 import { KnowledgeManager } from "../memory/knowledge.js";
 import { PersonaManager } from "../memory/persona.js";
 import { ReflectionManager } from "../memory/reflection.js";
@@ -90,12 +91,16 @@ export async function runDaemon(
 		const activityTracker = new ActivityTracker(
 			resolve(DATA_DIR, "memory", "activity"),
 		);
+		const history = new ChatHistoryManager(
+			resolve(DATA_DIR, "memory", "history"),
+		);
 
 		// 4. Initialize context builder
 		const contextBuilder = new ContextBuilder({
 			persona: personaManager,
 			relationships,
 			knowledge,
+			history,
 			reflections,
 		});
 
@@ -148,6 +153,7 @@ export async function runDaemon(
 			knowledge,
 			reflections,
 			activityTracker,
+			history,
 			integrator,
 			plugins,
 		});
@@ -163,6 +169,7 @@ export async function runDaemon(
 			relationships,
 			sessionStore,
 			activityTracker,
+			history,
 			plugins,
 		})) {
 			cronService.add(job);

@@ -10,6 +10,7 @@ import { handleMemorySearch } from "../commands/memory-search.js";
 import type { ContextBuilder } from "../context/builder.js";
 import type { ResultMessage } from "../executor/types.js";
 import type { ActivityTracker } from "../memory/activity.js";
+import type { ChatHistoryManager } from "../memory/history.js";
 import type { KnowledgeManager } from "../memory/knowledge.js";
 import type { ReflectionManager } from "../memory/reflection.js";
 import type { RelationshipManager } from "../memory/relationships.js";
@@ -28,6 +29,7 @@ export type MessageRouterDeps = {
 	knowledge: KnowledgeManager;
 	reflections: ReflectionManager;
 	activityTracker: ActivityTracker;
+	history: ChatHistoryManager;
 	integrator: SessionIntegrator;
 	plugins: ChannelPlugin[];
 };
@@ -100,6 +102,19 @@ export class MessageRouter {
 		// Record activity for monitoring
 		void this.deps.activityTracker
 			.recordActivity(msg.userId, msg.timestamp)
+			.catch(() => {});
+
+		// Save incoming message to history
+		void this.deps.history
+			.append({
+				messageId: msg.id,
+				userId: msg.userId,
+				userName: msg.userName,
+				channelId: msg.channelId,
+				content: msg.content,
+				timestamp: msg.timestamp,
+				isBot: false,
+			})
 			.catch(() => {});
 
 		// Show typing indicator
@@ -187,8 +202,23 @@ export class MessageRouter {
 			);
 		}
 
-		// Post-session integration (fire and forget)
+		// Save bot response to history
 		const finalText = resultText || lastSentText;
+		if (finalText) {
+			void this.deps.history
+				.append({
+					messageId: `bot-${Date.now()}`,
+					userId: "bot",
+					userName: "pet",
+					channelId: msg.channelId,
+					content: finalText,
+					timestamp: Date.now(),
+					isBot: true,
+				})
+				.catch(() => {});
+		}
+
+		// Post-session integration (fire and forget)
 		if (finalText) {
 			const integrationKey = `${msg.userId}:${msg.channelId}`;
 			void this.deps.integrator

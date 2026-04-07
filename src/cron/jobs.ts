@@ -10,6 +10,7 @@
 import { spawnClaude } from "../executor/spawner.js";
 import { analyzeActivity } from "../memory/activity-analyzer.js";
 import type { ActivityTracker } from "../memory/activity.js";
+import type { ChatHistoryManager } from "../memory/history.js";
 import type { KnowledgeManager } from "../memory/knowledge.js";
 import type { PersonaManager } from "../memory/persona.js";
 import type { ReflectionManager } from "../memory/reflection.js";
@@ -26,6 +27,7 @@ export type CronJobDeps = {
 	relationships: RelationshipManager;
 	sessionStore: SessionStore;
 	activityTracker: ActivityTracker;
+	history: ChatHistoryManager;
 	plugins: ChannelPlugin[];
 };
 
@@ -64,6 +66,12 @@ export function createBuiltinJobs(deps: CronJobDeps): CronJob[] {
 			intervalMs: 10 * 60 * 1000, // 10 minutes
 			runOnStart: false,
 			handler: () => runActivityMonitor(deps),
+		},
+		{
+			id: "history-prune",
+			intervalMs: TWENTY_FOUR_HOURS,
+			runOnStart: false,
+			handler: () => runHistoryPrune(deps),
 		},
 	];
 }
@@ -283,5 +291,26 @@ async function runActivityMonitor(deps: CronJobDeps): Promise<void> {
 				logger.warn("Failed to send activity alert", { error: String(err) });
 			}
 		}
+	}
+}
+
+/**
+ * History prune — remove entries older than 7 days, keep at least 500.
+ */
+async function runHistoryPrune(deps: CronJobDeps): Promise<void> {
+	const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+	const channels = await deps.history.listChannels();
+	let totalPruned = 0;
+
+	for (const channelId of channels) {
+		const pruned = await deps.history.prune(channelId, SEVEN_DAYS, 500);
+		totalPruned += pruned;
+	}
+
+	if (totalPruned > 0) {
+		logger.info("History prune completed", {
+			pruned: totalPruned,
+			channels: channels.length,
+		});
 	}
 }

@@ -6,6 +6,7 @@
  * with token budget management per section.
  */
 
+import type { ChatHistoryManager } from "../memory/history.js";
 import type { KnowledgeManager } from "../memory/knowledge.js";
 import type { PersonaManager } from "../memory/persona.js";
 import type { ReflectionManager } from "../memory/reflection.js";
@@ -17,6 +18,7 @@ export type ContextBuilderDeps = {
 	relationships: RelationshipManager;
 	knowledge: KnowledgeManager;
 	reflections: ReflectionManager;
+	history?: ChatHistoryManager;
 };
 
 /** Rough token estimate: ~4 chars per token for English, ~2 for Korean. */
@@ -60,20 +62,34 @@ export class ContextBuilder {
 	 */
 	async build(
 		userId: string,
-		_channelId: string,
+		channelId: string,
 		recentQuery?: string,
 		recentMessages?: ChannelChatMessage[],
 	): Promise<string> {
-		// Parallel I/O — all four sections are independent
-		const [personaSection, relSection, knowledgeSection, reflectionSection] =
-			await Promise.all([
-				this.deps.persona.toPromptSection(),
-				this.deps.relationships.toPromptSection(userId),
-				recentQuery
-					? this.deps.knowledge.toPromptSection(recentQuery, 5)
-					: Promise.resolve(null),
-				this.deps.reflections.toPromptSection(3),
-			]);
+		// Parallel I/O — all sections are independent
+		const historyPromise =
+			this.deps.history && recentQuery && hasBackReference(recentQuery)
+				? this.deps.history.search(channelId, {
+						keyword: extractReferenceKeyword(recentQuery),
+						limit: 10,
+					})
+				: Promise.resolve([]);
+
+		const [
+			personaSection,
+			relSection,
+			knowledgeSection,
+			reflectionSection,
+			historyResults,
+		] = await Promise.all([
+			this.deps.persona.toPromptSection(),
+			this.deps.relationships.toPromptSection(userId),
+			recentQuery
+				? this.deps.knowledge.toPromptSection(recentQuery, 5)
+				: Promise.resolve(null),
+			this.deps.reflections.toPromptSection(3),
+			historyPromise,
+		]);
 
 		const sections: string[] = [];
 		sections.push(truncateToTokenBudget(personaSection, TOKEN_BUDGETS.persona));
@@ -103,7 +119,17 @@ export class ContextBuilder {
 			sections.push(chatLines.join("\n"));
 		}
 
-		// 6. Meta instructions
+		// 6. Referenced past conversation (from history search)
+		if (historyResults.length > 0) {
+			const histLines = ['# 과거 대화 참조 ("아까 그거" 관련)'];
+			for (const h of historyResults) {
+				const date = new Date(h.timestamp).toLocaleString("ko-KR");
+				histLines.push(`[${date}] ${h.userName}: ${h.content.slice(0, 200)}`);
+			}
+			sections.push(truncateToTokenBudget(histLines.join("\n"), 800));
+		}
+
+		// 7. Meta instructions
 		sections.push(buildMetaInstructions());
 
 		return sections.join("\n\n");
@@ -119,4 +145,34 @@ function buildMetaInstructions(): string {
 		"- **반드시 사용자에게 텍스트 답변을 먼저 한 후에** 도구를 사용해라. 도구 사용 전에 항상 먼저 말해라.",
 		`- 현재 시각: ${new Date().toLocaleString("ko-KR")}`,
 	].join("\n");
+}
+
+const BACK_REFERENCE_PATTERNS = [
+	/아까/,
+	/그거/,
+	/그때/,
+	/전에/,
+	/earlier/i,
+	/before/i,
+	/지난번/,
+	/아까\s*그/,
+	/이전에/,
+	/방금/,
+	/저번/,
+	/뭐라고\s*했/,
+	/뭐였/,
+];
+
+function hasBackReference(text: string): boolean {
+	return BACK_REFERENCE_PATTERNS.some((p) => p.test(text));
+}
+
+function extractReferenceKeyword(text: string): string {
+	// Strip the reference words themselves, keep the subject
+	let cleaned = text;
+	for (const p of BACK_REFERENCE_PATTERNS) {
+		cleaned = cleaned.replace(p, "");
+	}
+	cleaned = cleaned.replace(/[?？!！.。,，\s]+/g, " ").trim();
+	return cleaned || text;
 }
