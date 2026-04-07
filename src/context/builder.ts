@@ -6,6 +6,7 @@
  * with token budget management per section.
  */
 
+import { readFile } from "node:fs/promises";
 import type { ChatHistoryManager } from "../memory/history.js";
 import type { KnowledgeManager } from "../memory/knowledge.js";
 import type { PersonaManager } from "../memory/persona.js";
@@ -21,6 +22,8 @@ export type ContextBuilderDeps = {
 	reflections: ReflectionManager;
 	history?: ChatHistoryManager;
 	statusReader?: StatusReader;
+	/** Path to a knowledge.md file with static knowledge for this pet. */
+	knowledgeFilePath?: string;
 };
 
 /** Rough token estimate: ~4 chars per token for English, ~2 for Korean. */
@@ -97,6 +100,22 @@ export class ContextBuilder {
 
 		const sections: string[] = [];
 		sections.push(truncateToTokenBudget(personaSection, TOKEN_BUDGETS.persona));
+
+		// Static knowledge file (knowledge.md)
+		if (this.deps.knowledgeFilePath) {
+			try {
+				const knowledgeFileContent = await readFile(
+					this.deps.knowledgeFilePath,
+					"utf8",
+				);
+				if (knowledgeFileContent.trim()) {
+					sections.push(truncateToTokenBudget(knowledgeFileContent, 1000));
+				}
+			} catch {
+				// File not found or unreadable — skip
+			}
+		}
+
 		if (relSection) {
 			sections.push(
 				truncateToTokenBudget(relSection, TOKEN_BUDGETS.relationship),

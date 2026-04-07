@@ -45,7 +45,7 @@ async function main() {
 		controller.abort();
 	});
 
-	await runDaemon(config, controller.signal, dataDir);
+	await runDaemon(config, controller.signal, dataDir, configDir);
 }
 
 main().catch((err) => {

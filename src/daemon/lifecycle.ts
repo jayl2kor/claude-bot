@@ -35,6 +35,7 @@ export async function runDaemon(
 	config: AppConfig,
 	signal: AbortSignal,
 	dataDir?: string,
+	configDir?: string,
 ): Promise<void> {
 	const DATA_DIR = dataDir ?? resolve("data");
 	const lock = new ProcessLock(resolve(DATA_DIR, "state", "daemon.pid"));
@@ -106,6 +107,11 @@ export async function runDaemon(
 			? new StatusReader(sharedStatusDir, config.persona.name)
 			: undefined;
 
+		// Resolve knowledge.md path from config directory
+		const knowledgeFilePath = configDir
+			? resolve(configDir, "knowledge.md")
+			: undefined;
+
 		const contextBuilder = new ContextBuilder({
 			persona: personaManager,
 			relationships,
@@ -113,6 +119,7 @@ export async function runDaemon(
 			history,
 			reflections,
 			statusReader,
+			knowledgeFilePath,
 		});
 
 		// 5. Initialize session manager
