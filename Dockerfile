@@ -21,8 +21,4 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./
 
-RUN mkdir -p /app/data /app/config && chown -R node:node /app/data /app/config
-
-USER node
-
 ENTRYPOINT ["node", "dist/main.js"]
