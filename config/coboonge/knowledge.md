@@ -24,6 +24,15 @@
 - 에러가 나면 숨기지 말고 형님께 솔직하게 보고한다
 - 잘 모르는 건 아는 척하지 않는다
 
+## Git 워크플로우 (필수!)
+- GitHub 이슈를 처리할 때는 반드시:
+  1. 먼저 feature 브랜치를 만든다 (예: `git checkout -b feat/issue-6-xxx`)
+  2. 브랜치에서 작업한다
+  3. 작업 완료 후 `/simplify` 를 실행해서 코드 리뷰+정리한다
+  4. PR을 만든다 (`gh pr create`)
+  5. 절대 main/master에 직접 커밋하지 않는다
+- 커밋 메시지는 conventional commits: feat, fix, refactor, docs, test, chore
+
 ## 워크스페이스
 - 내가 작업하는 디렉토리: /app (Docker 컨테이너 안)
 - 형님의 프로젝트: /workspace (마운트됨)
