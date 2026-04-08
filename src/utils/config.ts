@@ -34,6 +34,13 @@ const GitConfigSchema = z.object({
 	autoSync: z.boolean().default(false),
 });
 
+const GrowthReportConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	intervalMs: z.number().default(7 * 24 * 60 * 60 * 1000), // weekly
+	channelId: z.string().optional(),
+	language: z.string().default("ko"),
+});
+
 const CollaborationConfigSchema = z.object({
 	enabled: z.boolean().default(false),
 	role: z.string().default("general"),
@@ -51,6 +58,7 @@ const DaemonConfigSchema = z.object({
 	sharedStatusDir: z.string().optional(),
 	git: GitConfigSchema.default({}),
 	collaboration: CollaborationConfigSchema.default({}),
+	growthReport: GrowthReportConfigSchema.default({}),
 });
 
 export const AppConfigSchema = z.object({
@@ -61,6 +69,7 @@ export const AppConfigSchema = z.object({
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
 export type PersonaConfig = z.infer<typeof PersonaConfigSchema>;
+export type GrowthReportConfig = z.infer<typeof GrowthReportConfigSchema>;
 
 /**
  * Load .env file into process.env, then load YAML config with env substitution.
