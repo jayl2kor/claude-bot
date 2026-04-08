@@ -341,6 +341,7 @@ export async function runDaemon(
 		// 12. Initialize and start cron service
 		const cronService = new CronService();
 		for (const job of createBuiltinJobs({
+			petId: config.persona.name,
 			persona: personaManager,
 			knowledge,
 			reflections,
