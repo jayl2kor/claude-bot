@@ -211,7 +211,7 @@ export function createBuiltinJobs(deps: CronJobDeps): CronJob[] {
  * Reference: OpenClaw dreaming pattern.
  * Reads recent reflections and asks Claude to produce a consolidated narrative.
  */
-async function runMemoryReflection(deps: CronJobDeps): Promise<void> {
+async function runMemoryReflection(deps: CronJobDeps): Promise<string | void> {
 	const recent = await deps.reflections.getRecent(10);
 	if (recent.length < 3) {
 		logger.debug("Not enough reflections for consolidation", {
@@ -238,6 +238,7 @@ async function runMemoryReflection(deps: CronJobDeps): Promise<void> {
 
 	if (result) {
 		logger.info("Memory reflection completed", { resultLength: result.length });
+		return `기억 회고 완료! ${recent.length}개의 대화를 분석했어요.`;
 	}
 }
 
@@ -245,7 +246,7 @@ async function runMemoryReflection(deps: CronJobDeps): Promise<void> {
  * Soul evolution — update persona soul based on accumulated knowledge.
  * Asks Claude to analyze all knowledge and suggest personality evolution.
  */
-async function runSoulEvolution(deps: CronJobDeps): Promise<void> {
+async function runSoulEvolution(deps: CronJobDeps): Promise<string | void> {
 	const allKnowledge = await deps.knowledge.listAll();
 	const allRelationships = await deps.relationships.listAll();
 
@@ -310,6 +311,10 @@ async function runSoulEvolution(deps: CronJobDeps): Promise<void> {
 			traits: parsed.learnedTraits?.length ?? 0,
 			topics: parsed.preferredTopics?.length ?? 0,
 		});
+
+		const traits = parsed.learnedTraits ?? [];
+		const topics = parsed.preferredTopics ?? [];
+		return `영혼 진화 완료! 새로운 특성 ${traits.length}개, 관심 주제 ${topics.length}개를 발견했어요.`;
 	} catch (err) {
 		logger.warn("Soul evolution parse failed", { error: String(err) });
 	}
@@ -318,7 +323,7 @@ async function runSoulEvolution(deps: CronJobDeps): Promise<void> {
 /**
  * Knowledge dedup — merge duplicate or near-duplicate knowledge entries.
  */
-async function runKnowledgeDedup(deps: CronJobDeps): Promise<void> {
+async function runKnowledgeDedup(deps: CronJobDeps): Promise<string | void> {
 	const all = await deps.knowledge.listAll();
 	if (all.length < 2) return;
 
@@ -354,13 +359,14 @@ async function runKnowledgeDedup(deps: CronJobDeps): Promise<void> {
 
 	if (merged > 0) {
 		logger.info("Knowledge dedup completed", { merged, remaining: keep.size });
+		return `지식 정리 완료! 중복 ${merged}개를 병합하고 ${keep.size}개가 남았어요.`;
 	}
 }
 
 /**
  * Session cleanup — remove session records older than 30 days.
  */
-async function runSessionCleanup(deps: CronJobDeps): Promise<void> {
+async function runSessionCleanup(deps: CronJobDeps): Promise<string | void> {
 	const keys = await deps.sessionStore.list();
 	const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 	const cutoff = Date.now() - THIRTY_DAYS;
@@ -379,6 +385,7 @@ async function runSessionCleanup(deps: CronJobDeps): Promise<void> {
 			cleaned,
 			remaining: keys.length - cleaned,
 		});
+		return `세션 정리 완료! 오래된 세션 ${cleaned}개를 삭제했어요. (${keys.length - cleaned}개 남음)`;
 	}
 }
 
@@ -427,7 +434,7 @@ async function runActivityMonitor(deps: CronJobDeps): Promise<void> {
 /**
  * History prune — remove entries older than 7 days, keep at least 500.
  */
-async function runHistoryPrune(deps: CronJobDeps): Promise<void> {
+async function runHistoryPrune(deps: CronJobDeps): Promise<string | void> {
 	const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
 	const channels = await deps.history.listChannels();
 	let totalPruned = 0;
@@ -442,6 +449,7 @@ async function runHistoryPrune(deps: CronJobDeps): Promise<void> {
 			pruned: totalPruned,
 			channels: channels.length,
 		});
+		return `대화 기록 정리 완료! ${channels.length}개 채널에서 ${totalPruned}개 메시지를 삭제했어요.`;
 	}
 }
 
@@ -453,7 +461,7 @@ async function runHistoryPrune(deps: CronJobDeps): Promise<void> {
  * avoid archiving entries whose strength values were not yet updated (which
  * would cause data loss).
  */
-async function runMemoryDecay(deps: CronJobDeps): Promise<void> {
+async function runMemoryDecay(deps: CronJobDeps): Promise<string | void> {
 	try {
 		await deps.knowledge.applyDecayAll();
 	} catch (err) {
@@ -466,13 +474,18 @@ async function runMemoryDecay(deps: CronJobDeps): Promise<void> {
 
 	const archived = await deps.knowledge.archiveWeak();
 	logger.info("Memory decay completed", { archived });
+	if (archived > 0) {
+		return `기억 감쇠 처리 완료! 약해진 기억 ${archived}개를 보관함으로 옮겼어요.`;
+	}
 }
 
 /**
  * Knowledge propagation — share high-confidence knowledge with peer pets.
  * Runs hourly when peerKnowledge stores are configured (Issue #6).
  */
-async function runKnowledgePropagation(deps: CronJobDeps): Promise<void> {
+async function runKnowledgePropagation(
+	deps: CronJobDeps,
+): Promise<string | void> {
 	if (!deps.peerKnowledge || deps.peerKnowledge.length === 0) return;
 
 	let totalPropagated = 0;
@@ -507,6 +520,7 @@ async function runKnowledgePropagation(deps: CronJobDeps): Promise<void> {
 			totalPropagated,
 			peers: deps.peerKnowledge.length,
 		});
+		return `지식 전파 완료! ${deps.peerKnowledge.length}명의 친구에게 ${totalPropagated}개의 지식을 공유했어요.`;
 	}
 }
 
@@ -516,17 +530,20 @@ async function runKnowledgePropagation(deps: CronJobDeps): Promise<void> {
 async function runUploadCleanup(
 	uploadDir: string,
 	retentionDays: number,
-): Promise<void> {
+): Promise<string | void> {
 	const removed = await cleanOldUploads(uploadDir, retentionDays);
 	if (removed > 0) {
 		logger.info("Upload cleanup completed", { removed, retentionDays });
+		return `업로드 정리 완료! 오래된 파일 ${removed}개를 삭제했어요.`;
 	}
 }
 
 /**
  * Knowledge feed poll — import new knowledge from other pets.
  */
-async function runKnowledgeFeedPoll(deps: KnowledgeFeedDeps): Promise<void> {
+async function runKnowledgeFeedPoll(
+	deps: KnowledgeFeedDeps,
+): Promise<string | void> {
 	const result = await deps.feedSubscriber.poll();
 	if (result.imported > 0 || result.skipped > 0) {
 		logger.info("Knowledge feed poll completed", {
@@ -534,12 +551,17 @@ async function runKnowledgeFeedPoll(deps: KnowledgeFeedDeps): Promise<void> {
 			skipped: result.skipped,
 		});
 	}
+	if (result.imported > 0) {
+		return `지식 피드에서 새로운 지식 ${result.imported}개를 가져왔어요!`;
+	}
 }
 
 /**
  * Knowledge feed cleanup — remove feed entries older than TTL.
  */
-async function runKnowledgeFeedCleanup(deps: KnowledgeFeedDeps): Promise<void> {
+async function runKnowledgeFeedCleanup(
+	deps: KnowledgeFeedDeps,
+): Promise<string | void> {
 	const expired = await deps.feedStore.findExpired(deps.ttlMs);
 	let removed = 0;
 
@@ -552,6 +574,7 @@ async function runKnowledgeFeedCleanup(deps: KnowledgeFeedDeps): Promise<void> {
 		logger.info("Knowledge feed cleanup completed", {
 			removed,
 		});
+		return `지식 피드 정리 완료! 만료된 항목 ${removed}개를 삭제했어요.`;
 	}
 }
 

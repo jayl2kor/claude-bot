@@ -526,6 +526,25 @@ export async function runDaemon(
 			}
 		}
 
+		// 11d. Cron report — send job summaries to a dedicated Discord channel
+		const cronReportConfig = config.daemon.cronReport;
+		if (
+			cronReportConfig.enabled &&
+			cronReportConfig.channelId &&
+			plugins.length > 0
+		) {
+			const reportPlugin = plugins[0];
+			const petName = config.persona.name;
+			cronService.setReporter(async (jobId, summary, durationMs) => {
+				const seconds = (durationMs / 1000).toFixed(1);
+				const message = `[${petName}] **${jobId}** (${seconds}s)\n${summary}`;
+				await reportPlugin.sendMessage(cronReportConfig.channelId, message);
+			});
+			logger.info("Cron reporter enabled", {
+				channelId: cronReportConfig.channelId,
+			});
+		}
+
 		await cronService.start(signal);
 
 		// 12. Write initial pointer

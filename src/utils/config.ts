@@ -85,6 +85,11 @@ const KnowledgeFeedConfigSchema = z.object({
 	sharedDir: z.string().optional(),
 });
 
+const CronReportConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	channelId: z.string().default(""),
+});
+
 const PRReviewCronSchema = z.object({
 	enabled: z.boolean().default(false),
 	pollIntervalMs: z.number().default(5 * 60 * 1000),
@@ -124,6 +129,7 @@ const DaemonConfigSchema = z
 		knowledgeFeed: KnowledgeFeedConfigSchema.default({}),
 		study: StudyConfigSchema.default({}),
 		evaluation: EvaluationConfigSchema.default({}),
+		cronReport: CronReportConfigSchema.default({}),
 		prReview: PRReviewCronSchema.default({}),
 		prResponse: PRResponseCronSchema.default({}),
 	})
@@ -147,6 +153,7 @@ export type AppConfig = z.infer<typeof AppConfigSchema>;
 export type PersonaConfig = z.infer<typeof PersonaConfigSchema>;
 export type GrowthReportConfig = z.infer<typeof GrowthReportConfigSchema>;
 export type GitWatcherConfig = z.infer<typeof GitWatcherConfigSchema>;
+export type CronReportConfig = z.infer<typeof CronReportConfigSchema>;
 
 /**
  * Load .env file into process.env, then load YAML config with env substitution.

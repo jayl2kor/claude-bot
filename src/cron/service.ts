@@ -12,8 +12,8 @@ export type CronJob = {
 	id: string;
 	/** Interval in ms between runs. */
 	intervalMs: number;
-	/** Job handler. Should be idempotent. */
-	handler: () => Promise<void>;
+	/** Job handler. Should be idempotent. Returns optional summary for reporting. */
+	handler: () => Promise<string | void>;
 	/** Whether to run immediately on service start. */
 	runOnStart?: boolean;
 };
@@ -25,9 +25,21 @@ type JobState = {
 	running: boolean;
 };
 
+export type CronReporter = (
+	jobId: string,
+	summary: string,
+	durationMs: number,
+) => Promise<void>;
+
 export class CronService {
 	private readonly jobs = new Map<string, JobState>();
 	private started = false;
+	private reporter: CronReporter | null = null;
+
+	/** Set a reporter that receives job completion summaries. */
+	setReporter(reporter: CronReporter): void {
+		this.reporter = reporter;
+	}
 
 	/** Register a job. Must be called before start(). */
 	add(job: CronJob): void {
@@ -116,12 +128,21 @@ export class CronService {
 		const startMs = Date.now();
 
 		try {
-			await state.job.handler();
+			const summary = await state.job.handler();
 			state.lastRunAt = Date.now();
+			const durationMs = Date.now() - startMs;
 			logger.debug("Cron job completed", {
 				id: state.job.id,
-				durationMs: Date.now() - startMs,
+				durationMs,
 			});
+			if (summary && this.reporter) {
+				this.reporter(state.job.id, summary, durationMs).catch((err) => {
+					logger.warn("Cron reporter failed", {
+						id: state.job.id,
+						error: String(err),
+					});
+				});
+			}
 		} catch (err) {
 			logger.error("Cron job failed", {
 				id: state.job.id,
