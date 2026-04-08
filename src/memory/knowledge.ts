@@ -10,7 +10,7 @@ const KnowledgeEntrySchema = z.object({
 	id: z.string(),
 	topic: z.string(),
 	content: z.string(),
-	source: z.enum(["taught", "inferred", "corrected", "self-studied"]),
+	source: z.enum(["taught", "inferred", "corrected", "propagated", "self-studied"]),
 	taughtBy: z.string().optional(),
 	createdAt: z.number(),
 	updatedAt: z.number(),
