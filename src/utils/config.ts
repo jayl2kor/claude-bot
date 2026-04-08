@@ -40,6 +40,13 @@ const CollaborationConfigSchema = z.object({
 	sharedDir: z.string().optional(),
 });
 
+const EvaluationConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	sharedDir: z.string().optional(),
+	probability: z.number().min(0).max(1).default(0.3),
+	maxPendingCount: z.number().default(5),
+});
+
 const DaemonConfigSchema = z.object({
 	maxConcurrentSessions: z.number().default(10),
 	sessionTimeoutMs: z.number().default(30 * 60 * 1000),
@@ -51,6 +58,7 @@ const DaemonConfigSchema = z.object({
 	sharedStatusDir: z.string().optional(),
 	git: GitConfigSchema.default({}),
 	collaboration: CollaborationConfigSchema.default({}),
+	evaluation: EvaluationConfigSchema.default({}),
 });
 
 export const AppConfigSchema = z.object({
