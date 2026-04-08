@@ -211,6 +211,7 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 			git: { enabled: false, autoSync: false },
 			collaboration: { enabled: false, role: "general" },
 			smartModelSelection: { enabled: false, defaultModel: "sonnet" },
+			growthReport: { enabled: false, intervalMs: 604_800_000, language: "ko" },
 			knowledgeFeed: { enabled: false, pollIntervalMs: 30_000, ttlMs: 604_800_000, confidenceMultiplier: 0.7 },
 			study: {
 				enabled: false,
@@ -219,11 +220,7 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 				model: "sonnet",
 				maxTurns: 3,
 			},
-			evaluation: {
-				enabled: false,
-				probability: 0.3,
-				maxPendingCount: 5,
-			},
+			evaluation: { enabled: false, probability: 0.3, maxPendingCount: 5 },
 		},
 		...overrides,
 	};

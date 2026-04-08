@@ -379,3 +379,65 @@ describe("MessageRouter error handling (MEDIUM #6)", () => {
 		).resolves.not.toThrow();
 	});
 });
+
+// Smart Model Selection integration tests
+describe("MessageRouter smart model selection", () => {
+	it("does not set model when smartModelSelection disabled", async () => {
+		const plugin = makePlugin();
+		let capturedHandler!: (msg: IncomingMessage) => Promise<void>;
+		vi.mocked(plugin.onMessage).mockImplementation((h) => { capturedHandler = h; });
+		const deps = makeDeps({ plugins: [plugin] });
+		const router = new MessageRouter(deps);
+		router.start();
+		await capturedHandler(makeIncomingMessage({ content: "hello" }));
+		const mock = vi.mocked(deps.sessionManager.getOrCreate);
+		expect(mock).toHaveBeenCalledOnce();
+		// getOrCreate(userId, channelId, content, systemPrompt, selectedModel)
+		// selectedModel is index 4 (0-based); when SMS is disabled it should be undefined
+		expect(mock.mock.calls[0]?.[4]).toBeUndefined();
+	});
+
+	it("selects opus for complexity keywords", async () => {
+		const plugin = makePlugin();
+		let capturedHandler!: (msg: IncomingMessage) => Promise<void>;
+		vi.mocked(plugin.onMessage).mockImplementation((h) => { capturedHandler = h; });
+		const mockStats = {
+			getSessionModel: vi.fn().mockReturnValue(undefined),
+			setSessionModel: vi.fn(),
+			record: vi.fn().mockResolvedValue(undefined),
+		};
+		const deps = makeDeps({
+			plugins: [plugin],
+			smartModelSelection: { enabled: true, statsTracker: mockStats as any },
+		});
+		const router = new MessageRouter(deps);
+		router.start();
+		await capturedHandler(makeIncomingMessage({ content: "이 시스템 아키텍처를 설계해줘" }));
+		const mock = vi.mocked(deps.sessionManager.getOrCreate);
+		// selectedModel is index 4 (0-based) in getOrCreate call
+		expect(mock.mock.calls[0]?.[4]).toBe("opus");
+		expect(mockStats.record).toHaveBeenCalledWith("opus", false);
+	});
+
+	it("selects haiku for greeting", async () => {
+		const plugin = makePlugin();
+		let capturedHandler!: (msg: IncomingMessage) => Promise<void>;
+		vi.mocked(plugin.onMessage).mockImplementation((h) => { capturedHandler = h; });
+		const mockStats = {
+			getSessionModel: vi.fn().mockReturnValue(undefined),
+			setSessionModel: vi.fn(),
+			record: vi.fn().mockResolvedValue(undefined),
+		};
+		const deps = makeDeps({
+			plugins: [plugin],
+			smartModelSelection: { enabled: true, statsTracker: mockStats as any },
+		});
+		const router = new MessageRouter(deps);
+		router.start();
+		await capturedHandler(makeIncomingMessage({ content: "안녕" }));
+		const mock = vi.mocked(deps.sessionManager.getOrCreate);
+		// selectedModel is index 4 (0-based) in getOrCreate call
+		expect(mock.mock.calls[0]?.[4]).toBe("haiku");
+		expect(mockStats.record).toHaveBeenCalledWith("haiku", false);
+	});
+});

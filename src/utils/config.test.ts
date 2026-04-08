@@ -105,6 +105,28 @@ describe("AppConfigSchema", () => {
 		expect(result.daemon.claudeModel).toBe("opus");
 	});
 
+	it("applies smartModelSelection defaults (disabled, sonnet)", () => {
+		const result = AppConfigSchema.parse({});
+		expect(result.daemon.smartModelSelection.enabled).toBe(false);
+		expect(result.daemon.smartModelSelection.defaultModel).toBe("sonnet");
+	});
+
+	it("accepts custom smartModelSelection config", () => {
+		const result = AppConfigSchema.parse({
+			daemon: { smartModelSelection: { enabled: true, defaultModel: "opus" } },
+		});
+		expect(result.daemon.smartModelSelection.enabled).toBe(true);
+		expect(result.daemon.smartModelSelection.defaultModel).toBe("opus");
+	});
+
+	it("rejects invalid smartModelSelection defaultModel", () => {
+		expect(() =>
+			AppConfigSchema.parse({
+				daemon: { smartModelSelection: { defaultModel: "gpt-4" } },
+			}),
+		).toThrow();
+	});
+
 	it("accepts persona values array", () => {
 		const result = AppConfigSchema.parse({
 			persona: { values: ["정직", "유머", "배움"] },
