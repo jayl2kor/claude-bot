@@ -11,12 +11,14 @@ import { MessageRouter } from "../channel/router.js";
 import { createTelegramPlugin } from "../channel/telegram/plugin.js";
 import { CollaborationManager } from "../collaboration/manager.js";
 import { ContextBuilder } from "../context/builder.js";
-import { createBuiltinJobs } from "../cron/jobs.js";
+import { createBuiltinJobs, createGitWatcherJob } from "../cron/jobs.js";
 import type { KnowledgeFeedDeps } from "../cron/jobs.js";
 import { CronService } from "../cron/service.js";
 import { EvaluationPublisher } from "../evaluation/publisher.js";
 import { EvaluationStore } from "../evaluation/store.js";
 import { PeerEvaluator } from "../evaluation/evaluator.js";
+import { GitReviewer } from "../git/reviewer.js";
+import { GitWatcher } from "../git/watcher.js";
 import { FeedStore } from "../knowledge-feed/feed-store.js";
 import { FeedPublisher } from "../knowledge-feed/publisher.js";
 import { FeedSubscriber } from "../knowledge-feed/subscriber.js";
@@ -324,6 +326,43 @@ export async function runDaemon(
 				handler: () => statusWriter.write(),
 			});
 		}
+		// 11b. Git watcher cron job (optional, disabled by default)
+		const gitWatcherConfig = config.daemon.gitWatcher;
+		if (gitWatcherConfig.enabled && config.daemon.workspacePath) {
+			if (!gitWatcherConfig.reviewChannelId) {
+				logger.warn(
+					"GitWatcher: reviewChannelId is empty — reviews will not be delivered. Set daemon.gitWatcher.reviewChannelId in your config.",
+				);
+			}
+
+			const gitWatcher = new GitWatcher(
+				config.daemon.workspacePath,
+				gitWatcherConfig,
+				resolve(DATA_DIR, "state"),
+			);
+			await gitWatcher.init();
+
+			const gitReviewer = new GitReviewer(
+				config.persona.name,
+				config.persona.personality,
+			);
+
+			const gitWatcherJob = createGitWatcherJob({
+				watcher: gitWatcher,
+				reviewer: gitReviewer,
+				plugins,
+				reviewChannelId: gitWatcherConfig.reviewChannelId,
+				pollIntervalMs: gitWatcherConfig.pollIntervalMs,
+			});
+			if (gitWatcherJob) {
+				cronService.add(gitWatcherJob);
+				logger.info("Git watcher job registered", {
+					branches: gitWatcherConfig.branches,
+					pollIntervalMs: gitWatcherConfig.pollIntervalMs,
+				});
+			}
+		}
+
 		await cronService.start(signal);
 
 		// 12. Write initial pointer
