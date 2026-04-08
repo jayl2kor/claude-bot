@@ -7,7 +7,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { isENOENT } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
-import { PetStatusSchema, type PetStatus } from "./types.js";
+import { type PetStatus, PetStatusSchema } from "./types.js";
 
 const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -35,7 +35,8 @@ export class StatusReader {
 					if (!parsed.success) continue;
 
 					// Skip stale
-					if (Date.now() - parsed.data.heartbeatAt > STALE_THRESHOLD_MS) continue;
+					if (Date.now() - parsed.data.heartbeatAt > STALE_THRESHOLD_MS)
+						continue;
 
 					statuses.push(parsed.data);
 				} catch {
@@ -62,7 +63,9 @@ export class StatusReader {
 			const uptime = Math.floor((Date.now() - pet.startedAt) / 60_000);
 
 			if (pet.activeSessionCount === 0) {
-				lines.push(`- **${pet.personaName}** (${pet.petId}): 대기 중 (${uptime}분 가동)`);
+				lines.push(
+					`- **${pet.personaName}** (${pet.petId}): 대기 중 (${uptime}분 가동)`,
+				);
 			} else {
 				const activities = pet.sessions
 					.filter((s) => s.currentActivity)

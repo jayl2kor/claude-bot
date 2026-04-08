@@ -37,7 +37,11 @@ export class PointerManager {
 	async write(pointer: DaemonPointer): Promise<void> {
 		try {
 			await mkdir(dirname(this.pointerPath), { recursive: true });
-			await writeFile(this.pointerPath, JSON.stringify(pointer, null, 2), "utf8");
+			await writeFile(
+				this.pointerPath,
+				JSON.stringify(pointer, null, 2),
+				"utf8",
+			);
 			logger.debug("Pointer written");
 		} catch (err) {
 			logger.warn("Pointer write failed", { error: String(err) });

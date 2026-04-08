@@ -73,7 +73,9 @@ describe("parseLine", () => {
 	});
 
 	it("handles unicode and special characters without throwing", () => {
-		expect(() => parseLine('{"type":"test","content":"<script>alert(1)</script>"}')).not.toThrow();
+		expect(() =>
+			parseLine('{"type":"test","content":"<script>alert(1)</script>"}'),
+		).not.toThrow();
 	});
 
 	it("handles extremely long lines without throwing", () => {
@@ -88,7 +90,9 @@ describe("parseLine", () => {
 // ---------------------------------------------------------------------------
 
 describe("extractText", () => {
-	function makeAssistant(content: AssistantMessage["message"]["content"]): AssistantMessage {
+	function makeAssistant(
+		content: AssistantMessage["message"]["content"],
+	): AssistantMessage {
 		return {
 			type: "assistant",
 			message: {
@@ -106,7 +110,9 @@ describe("extractText", () => {
 	});
 
 	it("extracts text from a single text block", () => {
-		expect(extractText(makeAssistant([{ type: "text", text: "hello" }]))).toBe("hello");
+		expect(extractText(makeAssistant([{ type: "text", text: "hello" }]))).toBe(
+			"hello",
+		);
 	});
 
 	it("concatenates multiple text blocks", () => {
@@ -120,7 +126,12 @@ describe("extractText", () => {
 	it("ignores tool_use blocks", () => {
 		const msg = makeAssistant([
 			{ type: "text", text: "start " },
-			{ type: "tool_use", id: "t1", name: "Read", input: { file_path: "/foo" } },
+			{
+				type: "tool_use",
+				id: "t1",
+				name: "Read",
+				input: { file_path: "/foo" },
+			},
 			{ type: "text", text: "end" },
 		]);
 		expect(extractText(msg)).toBe("start end");
@@ -147,7 +158,9 @@ describe("extractText", () => {
 // ---------------------------------------------------------------------------
 
 describe("extractActivities", () => {
-	function makeAssistant(content: AssistantMessage["message"]["content"]): AssistantMessage {
+	function makeAssistant(
+		content: AssistantMessage["message"]["content"],
+	): AssistantMessage {
 		return {
 			type: "assistant",
 			message: {
@@ -170,7 +183,9 @@ describe("extractActivities", () => {
 	});
 
 	it("extracts text activity from text block", () => {
-		const activities = extractActivities(makeAssistant([{ type: "text", text: "Hello world" }]));
+		const activities = extractActivities(
+			makeAssistant([{ type: "text", text: "Hello world" }]),
+		);
 		expect(activities).toHaveLength(1);
 		expect(activities[0]!.type).toBe("text");
 		expect(activities[0]!.summary).toBe("Hello world");
@@ -179,14 +194,21 @@ describe("extractActivities", () => {
 
 	it("truncates long text summaries to 80 characters", () => {
 		const longText = "a".repeat(200);
-		const activities = extractActivities(makeAssistant([{ type: "text", text: longText }]));
+		const activities = extractActivities(
+			makeAssistant([{ type: "text", text: longText }]),
+		);
 		expect(activities[0]!.summary.length).toBe(80);
 	});
 
 	it("extracts tool_start activity from tool_use block", () => {
 		const activities = extractActivities(
 			makeAssistant([
-				{ type: "tool_use", id: "t1", name: "Read", input: { file_path: "/foo/bar.ts" } },
+				{
+					type: "tool_use",
+					id: "t1",
+					name: "Read",
+					input: { file_path: "/foo/bar.ts" },
+				},
 			]),
 		);
 		expect(activities).toHaveLength(1);
@@ -229,7 +251,9 @@ describe("extractActivities", () => {
 	});
 
 	it("skips empty text blocks", () => {
-		const activities = extractActivities(makeAssistant([{ type: "text", text: "" }]));
+		const activities = extractActivities(
+			makeAssistant([{ type: "text", text: "" }]),
+		);
 		expect(activities).toHaveLength(0);
 	});
 });

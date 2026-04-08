@@ -41,6 +41,7 @@ const TOKEN_BUDGETS = {
 	relationship: 400,
 	knowledge: 1500,
 	reflections: 600,
+	review: 400,
 };
 
 export class ContextBuilder {
@@ -68,7 +69,7 @@ export class ContextBuilder {
 		const [
 			personaSection,
 			relSection,
-			knowledgeSection,
+			knowledgeResult,
 			reflectionSection,
 			historyResults,
 			statusSection,
@@ -86,6 +87,11 @@ export class ContextBuilder {
 			this.deps.expertiseDocLoader?.toPromptSection() ?? Promise.resolve(null),
 			this.deps.delegationBuilder?.toPromptSection() ?? Promise.resolve(null),
 		]);
+
+		// Fire-and-forget: reinforce knowledge entries included in prompt
+		if (knowledgeResult?.entryIds.length) {
+			void this.deps.knowledge.reinforceMany(knowledgeResult.entryIds);
+		}
 
 		const sections: string[] = [];
 		sections.push(truncateToTokenBudget(personaSection, TOKEN_BUDGETS.persona));
@@ -120,9 +126,9 @@ export class ContextBuilder {
 				truncateToTokenBudget(relSection, TOKEN_BUDGETS.relationship),
 			);
 		}
-		if (knowledgeSection) {
+		if (knowledgeResult) {
 			sections.push(
-				truncateToTokenBudget(knowledgeSection, TOKEN_BUDGETS.knowledge),
+				truncateToTokenBudget(knowledgeResult.text, TOKEN_BUDGETS.knowledge),
 			);
 		}
 		if (reflectionSection) {
@@ -159,7 +165,33 @@ export class ContextBuilder {
 		// 8. Meta instructions
 		sections.push(buildMetaInstructions());
 
+		// 9. Fading knowledge review prompt (only when there is a query — avoids
+		//    unnecessary I/O on system-prompt-only builds with no user message)
+		if (recentQuery) {
+			const reviewSection = await this.toReviewPromptSection();
+			if (reviewSection) {
+				sections.push(reviewSection);
+			}
+		}
+
 		return sections.join("\n\n");
+	}
+
+	/**
+	 * Build a prompt section that reminds the pet about fading memories.
+	 * Budget: 400 tokens. The pet can naturally mention these to reinforce them.
+	 */
+	async toReviewPromptSection(): Promise<string | null> {
+		const fading = await this.deps.knowledge.listFading(3);
+		if (fading.length === 0) return null;
+
+		const lines = ["# 잊혀져가는 기억 (자연스럽게 언급하면 기억이 강화돼요)"];
+		for (const entry of fading) {
+			const pct = Math.round(entry.strength * 100);
+			lines.push(`- [${entry.topic}] ${entry.content} (강도: ${pct}%)`);
+		}
+
+		return truncateToTokenBudget(lines.join("\n"), TOKEN_BUDGETS.review);
 	}
 }
 

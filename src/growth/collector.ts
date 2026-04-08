@@ -96,6 +96,7 @@ export class GrowthCollector {
 				aggregatedHourly[h] += record.hourlyDistribution[h] ?? 0;
 			}
 		}
+		// Also include all relationships' activity records (not just "active" ones)
 		const peakHours = computePeakHours(aggregatedHourly, TOP_PEAK_HOURS);
 
 		return {

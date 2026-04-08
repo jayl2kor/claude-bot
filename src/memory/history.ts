@@ -37,9 +37,10 @@ export class ChatHistoryManager {
 			entries.push(entry);
 
 			// Trim to max size
-			const trimmed = entries.length > MAX_ENTRIES_PER_CHANNEL
-				? entries.slice(-MAX_ENTRIES_PER_CHANNEL)
-				: entries;
+			const trimmed =
+				entries.length > MAX_ENTRIES_PER_CHANNEL
+					? entries.slice(-MAX_ENTRIES_PER_CHANNEL)
+					: entries;
 
 			await this.saveChannel(entry.channelId, trimmed);
 		} catch (err) {
@@ -54,7 +55,10 @@ export class ChatHistoryManager {
 	}
 
 	/** Search history with filters. */
-	async search(channelId: string, options: HistorySearchOptions): Promise<ChatHistoryEntry[]> {
+	async search(
+		channelId: string,
+		options: HistorySearchOptions,
+	): Promise<ChatHistoryEntry[]> {
 		const entries = await this.loadChannel(channelId);
 		const limit = options.limit ?? 20;
 
@@ -77,7 +81,11 @@ export class ChatHistoryManager {
 	}
 
 	/** Prune entries older than maxAgeMs, keeping at least minKeep entries. */
-	async prune(channelId: string, maxAgeMs: number, minKeep = 500): Promise<number> {
+	async prune(
+		channelId: string,
+		maxAgeMs: number,
+		minKeep = 500,
+	): Promise<number> {
 		const entries = await this.loadChannel(channelId);
 		if (entries.length <= minKeep) return 0;
 
@@ -97,7 +105,9 @@ export class ChatHistoryManager {
 		const { readdir } = await import("node:fs/promises");
 		try {
 			const files = await readdir(this.baseDir);
-			return files.filter((f) => f.endsWith(".json")).map((f) => f.replace(".json", ""));
+			return files
+				.filter((f) => f.endsWith(".json"))
+				.map((f) => f.replace(".json", ""));
 		} catch (err) {
 			if (isENOENT(err)) return [];
 			throw err;
@@ -120,7 +130,10 @@ export class ChatHistoryManager {
 		}
 	}
 
-	private async saveChannel(channelId: string, entries: ChatHistoryEntry[]): Promise<void> {
+	private async saveChannel(
+		channelId: string,
+		entries: ChatHistoryEntry[],
+	): Promise<void> {
 		const path = this.channelPath(channelId);
 		await mkdir(dirname(path), { recursive: true });
 		await writeFile(path, JSON.stringify(entries), "utf8");
