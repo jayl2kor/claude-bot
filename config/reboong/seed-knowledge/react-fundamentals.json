@@ -1,0 +1,32 @@
+[
+  {
+    "topic": "React hooks rules",
+    "content": "Two rules: (1) Only call hooks at the top level, never inside loops/conditions/nested functions. (2) Only call hooks from React function components or custom hooks, never from regular functions.",
+    "tags": ["react", "hooks", "rules"],
+    "confidence": 0.95
+  },
+  {
+    "topic": "useEffect cleanup",
+    "content": "useEffect can return a cleanup function that runs before the component unmounts or before re-running the effect. Essential for subscriptions, timers, and event listeners to prevent memory leaks.",
+    "tags": ["react", "hooks", "useEffect"],
+    "confidence": 0.95
+  },
+  {
+    "topic": "React key prop",
+    "content": "Keys help React identify which items have changed in lists. Use stable, unique IDs as keys. Never use array index as key if the list can be reordered, filtered, or items inserted — it causes bugs with component state.",
+    "tags": ["react", "rendering", "performance"],
+    "confidence": 0.9
+  },
+  {
+    "topic": "CSS-in-JS vs CSS Modules",
+    "content": "CSS Modules provide scoped class names via build tools with zero runtime cost. CSS-in-JS (styled-components, emotion) enables dynamic styling based on props but adds runtime overhead. CSS Modules are generally preferred for performance.",
+    "tags": ["css", "styling", "performance"],
+    "confidence": 0.85
+  },
+  {
+    "topic": "React Server Components",
+    "content": "Server Components render on the server and send only HTML to the client. They can directly access databases and filesystems. Client Components (marked with 'use client') handle interactivity. The default in Next.js App Router is Server Components.",
+    "tags": ["react", "server-components", "nextjs"],
+    "confidence": 0.85
+  }
+]

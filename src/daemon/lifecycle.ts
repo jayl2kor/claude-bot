@@ -18,6 +18,9 @@ import {
 } from "../cron/jobs.js";
 import type { KnowledgeFeedDeps } from "../cron/jobs.js";
 import { CronService } from "../cron/service.js";
+import { DelegationBuilder } from "../expertise/defer.js";
+import { ExpertiseDocLoader } from "../expertise/loader.js";
+import { KnowledgeSeeder } from "../expertise/seeder.js";
 import { EvaluationPublisher } from "../evaluation/publisher.js";
 import { EvaluationStore } from "../evaluation/store.js";
 import { PeerEvaluator } from "../evaluation/evaluator.js";
@@ -41,6 +44,8 @@ import { SessionManager } from "../session/manager.js";
 import { SessionStore } from "../session/store.js";
 import { StatusReader } from "../status/reader.js";
 import { StatusWriter } from "../status/writer.js";
+import { StudyQueue } from "../study/queue.js";
+import { TopicResearcher } from "../study/researcher.js";
 import { SessionIntegrator } from "../teaching/integrator.js";
 import type { AppConfig } from "../utils/config.js";
 import { logger } from "../utils/logger.js";
@@ -117,13 +122,37 @@ export async function runDaemon(
 			resolve(DATA_DIR, "memory", "history"),
 		);
 
-		// 4. Initialize context builder (statusReader added after session manager)
+		// 4. Initialize expertise system
+		const CONFIG_DIR = configDir ?? resolve("config");
+		const expertiseDocLoader = new ExpertiseDocLoader(
+			resolve(CONFIG_DIR, "expertise"),
+		);
+
+		// Run knowledge seeder at boot
+		const seeder = new KnowledgeSeeder(
+			resolve(CONFIG_DIR, "seed-knowledge"),
+			DATA_DIR,
+			knowledge,
+		);
+		const seededCount = await seeder.seed();
+		if (seededCount > 0) {
+			logger.info("Knowledge seeder imported entries", {
+				count: seededCount,
+			});
+		}
+
+		// 5. Initialize context builder
 		const sharedStatusDir = config.daemon.sharedStatusDir
 			? resolve(config.daemon.sharedStatusDir)
 			: undefined;
 		const statusReader = sharedStatusDir
 			? new StatusReader(sharedStatusDir, config.persona.name)
 			: undefined;
+
+		const delegationBuilder = new DelegationBuilder(
+			config.expertise.deferTo,
+			statusReader,
+		);
 
 		// Resolve knowledge.md path from config directory
 		const knowledgeFilePath = configDir
@@ -138,6 +167,8 @@ export async function runDaemon(
 			reflections,
 			statusReader,
 			knowledgeFilePath,
+			expertiseDocLoader,
+			delegationBuilder,
 		});
 
 		// 5. Initialize session manager
@@ -216,7 +247,7 @@ export async function runDaemon(
 			});
 		}
 
-		// 8b. Initialize teaching pipeline
+		// 8a. Initialize teaching pipeline
 		const integrator = new SessionIntegrator(
 			knowledge,
 			reflections,
@@ -225,14 +256,15 @@ export async function runDaemon(
 		);
 
 		// 8c. Initialize smart model selection (optional)
+		// ModelStatsTracker is only instantiated when smartModelSelection is enabled
+		// to avoid creating unnecessary directories when the feature is disabled.
 		const smsConfig = config.daemon.smartModelSelection;
-		const modelStatsTracker = new ModelStatsTracker(
-			resolve(DATA_DIR, "model-stats"),
-		);
 		const smartModelSelection = smsConfig.enabled
 			? {
 					enabled: true as const,
-					statsTracker: modelStatsTracker,
+					statsTracker: new ModelStatsTracker(
+						resolve(DATA_DIR, "model-stats"),
+					),
 					defaultModel: smsConfig.defaultModel,
 				}
 			: undefined;
@@ -240,6 +272,30 @@ export async function runDaemon(
 		if (smsConfig.enabled) {
 			logger.info("Smart model selection enabled", {
 				defaultModel: smsConfig.defaultModel,
+			});
+		}
+
+		// 8c. Initialize study queue (optional)
+		const studyConfig = config.daemon.study;
+		let studyQueue: StudyQueue | undefined;
+		if (studyConfig.enabled) {
+			studyQueue = new StudyQueue(studyConfig, resolve(DATA_DIR, "study"));
+			const researcher = new TopicResearcher(studyConfig, knowledge);
+			studyQueue.setResearcher(researcher);
+
+			// Wire notification to all channel plugins
+			studyQueue.setNotifyFn((topic, result, error) => {
+				const message = error
+					? `"${topic}" 공부하다가 문제가 생겼어요: ${error}`
+					: `"${topic}" 공부 완료! ${result?.subtopics.length ?? 0}개의 서브토픽을 학습했습니다.`;
+				for (const p of plugins) {
+					void p.sendMessage("", message).catch(() => {});
+				}
+			});
+
+			logger.info("Study feature enabled", {
+				maxDailySessions: studyConfig.maxDailySessions,
+				model: studyConfig.model,
 			});
 		}
 
@@ -254,6 +310,7 @@ export async function runDaemon(
 			history,
 			integrator,
 			plugins,
+			studyQueue,
 			smartModelSelection,
 		});
 		router.start();
@@ -316,6 +373,7 @@ export async function runDaemon(
 		// 12. Initialize and start cron service
 		const cronService = new CronService();
 		for (const job of createBuiltinJobs({
+			petId: config.persona.name,
 			persona: personaManager,
 			knowledge,
 			reflections,
@@ -327,6 +385,7 @@ export async function runDaemon(
 			knowledgeFeed: knowledgeFeedDeps,
 			evaluator: peerEvaluator,
 			plugins,
+			expertiseConfig: config.expertise,
 		})) {
 			cronService.add(job);
 		}

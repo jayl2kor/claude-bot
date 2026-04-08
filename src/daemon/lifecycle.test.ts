@@ -70,8 +70,8 @@ vi.mock("../context/builder.js", () => ({
 
 vi.mock("../cron/jobs.js", () => ({
 	createBuiltinJobs: vi.fn(() => []),
-	createGitWatcherJob: vi.fn(() => null),
 	createGrowthReportJob: vi.fn(() => null),
+	createGitWatcherJob: vi.fn(() => null),
 }));
 
 vi.mock("../knowledge-feed/feed-store.js", () => ({
@@ -119,6 +119,7 @@ vi.mock("../session/manager.js", () => ({
 		getOrCreate: vi.fn(async () => null),
 		getActiveSessionKeys: vi.fn(() => []),
 		shutdown: vi.fn(async () => {}),
+		onDone: vi.fn(),
 	})),
 }));
 
@@ -137,17 +138,57 @@ vi.mock("../teaching/integrator.js", () => ({
 	})),
 }));
 
+vi.mock("../expertise/loader.js", () => ({
+	ExpertiseDocLoader: vi.fn().mockImplementation(() => ({
+		toPromptSection: vi.fn(async () => null),
+	})),
+}));
+
+vi.mock("../expertise/seeder.js", () => ({
+	KnowledgeSeeder: vi.fn().mockImplementation(() => ({
+		seed: vi.fn(async () => 0),
+	})),
+}));
+
+vi.mock("../expertise/defer.js", () => ({
+	DelegationBuilder: vi.fn().mockImplementation(() => ({
+		toPromptSection: vi.fn(async () => null),
+	})),
+}));
+
+vi.mock("../evaluation/publisher.js", () => ({
+	EvaluationPublisher: vi.fn().mockImplementation(() => ({
+		maybePublish: vi.fn(async () => {}),
+	})),
+}));
+
+vi.mock("../evaluation/store.js", () => ({
+	EvaluationStore: vi.fn().mockImplementation(() => ({})),
+}));
+
+vi.mock("../evaluation/evaluator.js", () => ({
+	PeerEvaluator: vi.fn().mockImplementation(() => ({
+		evaluate: vi.fn(async () => {}),
+	})),
+}));
+
 vi.mock("../git/watcher.js", () => ({
 	GitWatcher: vi.fn().mockImplementation(() => ({
 		init: vi.fn(async () => {}),
+		isActive: false,
+		getState: vi.fn(() => ({ lastCheckedSha: {} })),
 		poll: vi.fn(async () => []),
 		getDiff: vi.fn(async () => ""),
+		isRateLimited: vi.fn(() => false),
+		recordReview: vi.fn(),
+		persistState: vi.fn(async () => {}),
 	})),
 }));
 
 vi.mock("../git/reviewer.js", () => ({
 	GitReviewer: vi.fn().mockImplementation(() => ({
 		review: vi.fn(async () => ""),
+		sendReview: vi.fn(async () => {}),
 	})),
 }));
 
@@ -158,18 +199,42 @@ vi.mock("../growth/collector.js", () => ({
 }));
 
 vi.mock("../growth/history-store.js", () => ({
-	FileReportHistoryStore: vi.fn().mockImplementation(() => ({
-		save: vi.fn(async () => {}),
-		getLatest: vi.fn(async () => null),
-	})),
+	FileReportHistoryStore: vi.fn().mockImplementation(() => ({})),
 }));
 
 vi.mock("../growth/reporter.js", () => ({
 	GrowthReporter: vi.fn().mockImplementation(() => ({
-		generateReport: vi.fn(async () => ({ reportText: "" })),
-		sendToChannel: vi.fn(async () => {}),
-		saveHistory: vi.fn(async () => {}),
+		generateReport: vi.fn(async () => ({})),
 		getLatestHistory: vi.fn(async () => null),
+		saveHistory: vi.fn(async () => {}),
+		sendToChannel: vi.fn(async () => {}),
+	})),
+}));
+
+vi.mock("../model/stats.js", () => ({
+	ModelStatsTracker: vi.fn().mockImplementation(() => ({
+		getSessionModel: vi.fn(() => undefined),
+		setSessionModel: vi.fn(),
+		record: vi.fn(async () => {}),
+	})),
+}));
+
+vi.mock("../study/queue.js", () => ({
+	StudyQueue: vi.fn().mockImplementation(() => ({
+		setResearcher: vi.fn(),
+		setNotifyFn: vi.fn(),
+		enqueue: vi.fn(async () => ({ success: true })),
+		getState: vi.fn(async () => ({
+			requests: [],
+			dailyCount: 0,
+			dailyResetAt: 0,
+		})),
+	})),
+}));
+
+vi.mock("../study/researcher.js", () => ({
+	TopicResearcher: vi.fn().mockImplementation(() => ({
+		research: vi.fn(async () => ({ subtopics: [], knowledgeIds: [] })),
 	})),
 }));
 
@@ -221,19 +286,24 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 			maxTurns: 10,
 			skipPermissions: false,
 			git: { enabled: false, autoSync: false },
-			gitWatcher: {
-				enabled: false,
-				branches: ["main"],
-				pollIntervalMs: 60_000,
-				maxReviewsPerHour: 5,
-				ignoreAuthors: [],
-				reviewChannelId: "",
-				maxDiffChars: 4000,
-			},
+			gitWatcher: { enabled: false, branches: ["main"], pollIntervalMs: 60000, maxReviewsPerHour: 5, ignoreAuthors: [], reviewChannelId: "", maxDiffChars: 4000 },
 			collaboration: { enabled: false, role: "general" },
-			growthReport: { enabled: false, intervalMs: 604800000, language: "ko" },
 			smartModelSelection: { enabled: false, defaultModel: "sonnet" },
+			growthReport: { enabled: false, intervalMs: 604_800_000, language: "ko" },
+			knowledgeFeed: { enabled: false, pollIntervalMs: 30_000, ttlMs: 604_800_000, confidenceMultiplier: 0.7 },
+			study: {
+				enabled: false,
+				maxDailySessions: 5,
+				maxSubTopics: 8,
+				model: "sonnet",
+				maxTurns: 3,
+			},
 			evaluation: { enabled: false, probability: 0.3, maxPendingCount: 5 },
+		},
+		expertise: {
+			domains: [],
+			decayMultiplier: 0.3,
+			deferTo: {},
 		},
 		...overrides,
 	};
@@ -474,6 +544,7 @@ describe("runDaemon — shutdown sequence", () => {
 			getOrCreate: vi.fn(async () => null),
 			getActiveSessionKeys: vi.fn(() => []),
 			shutdown: shutdownMock,
+			onDone: vi.fn(),
 		}));
 
 		const dataDir = await makeTempDataDir();

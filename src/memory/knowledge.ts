@@ -17,11 +17,14 @@ import {
 } from "./decay.js";
 import { FileMemoryStore } from "./store.js";
 
+// Re-export decay multiplier helper for convenience
+export { getDecayMultiplier } from "../expertise/decay.js";
+
 const KnowledgeEntrySchema = z.object({
 	id: z.string(),
 	topic: z.string(),
 	content: z.string(),
-	source: z.enum(["taught", "inferred", "corrected", "propagated"]),
+	source: z.enum(["taught", "inferred", "corrected", "propagated", "seeded", "self-studied"]),
 	taughtBy: z.string().optional(),
 	propagatedFrom: z.string().optional(),
 	createdAt: z.number(),

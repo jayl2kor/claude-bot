@@ -6,7 +6,7 @@
  * Propagated knowledge has its confidence reduced to 80% of the original.
  */
 
-import type { KnowledgeEntry, KnowledgeManager } from "../memory/knowledge.js";
+import type { KnowledgeManager } from "../memory/knowledge.js";
 import { logger } from "../utils/logger.js";
 
 /** Minimum confidence level required for knowledge to be propagated. */
@@ -50,6 +50,9 @@ export async function propagateKnowledge(
 	targetPetId: string,
 	deps: KnowledgePropagatorDeps,
 ): Promise<PropagationResult> {
+	if (!sourcePetId.trim()) throw new Error("sourcePetId must not be empty");
+	if (!targetPetId.trim()) throw new Error("targetPetId must not be empty");
+
 	const sourceEntries = await deps.sourceKnowledge.listAll();
 	const targetEntries = await deps.targetKnowledge.listAll();
 	const targetIds = new Set(targetEntries.map((e) => e.id));
@@ -75,14 +78,15 @@ export async function propagateKnowledge(
 		const propagatedConfidence = entry.confidence * PROPAGATION_STRENGTH_FACTOR;
 		const now = Date.now();
 
-		// Upsert into target store with reduced confidence and propagated source
-		const propagatedEntry: KnowledgeEntry = {
-			...entry,
+		// Upsert into target store with reduced confidence.
+		// Destructure out updatedAt so the call matches upsert()'s Omit<KnowledgeEntry, 'updatedAt'> signature.
+		// upsert() sets updatedAt internally via Date.now().
+		const { updatedAt: _omit, ...entryWithoutTimestamp } = { ...entry };
+		await deps.targetKnowledge.upsert({
+			...entryWithoutTimestamp,
 			source: "propagated",
 			confidence: propagatedConfidence,
-			updatedAt: now,
-		};
-		await deps.targetKnowledge.upsert(propagatedEntry);
+		});
 
 		const event: PropagationEvent = {
 			sourcePetId,

@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
+import { ExpertiseConfigSchema } from "../expertise/types.js";
 import { isENOENT } from "./errors.js";
 
 const PersonaConfigSchema = z.object({
@@ -62,6 +63,14 @@ const CollaborationConfigSchema = z.object({
 	sharedDir: z.string().optional(),
 });
 
+const StudyConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	maxDailySessions: z.number().default(5),
+	maxSubTopics: z.number().default(8),
+	model: z.string().default("sonnet"),
+	maxTurns: z.number().default(3),
+});
+
 const KnowledgeFeedConfigSchema = z.object({
 	enabled: z.boolean().default(false),
 	pollIntervalMs: z.number().default(30_000),
@@ -92,6 +101,7 @@ const DaemonConfigSchema = z.object({
 	growthReport: GrowthReportConfigSchema.default({}),
 	smartModelSelection: SmartModelSelectionSchema.default({}),
 	knowledgeFeed: KnowledgeFeedConfigSchema.default({}),
+	study: StudyConfigSchema.default({}),
 	evaluation: EvaluationConfigSchema.default({}),
 });
 
@@ -99,6 +109,7 @@ export const AppConfigSchema = z.object({
 	persona: PersonaConfigSchema.default({}),
 	channels: ChannelsConfigSchema.default({}),
 	daemon: DaemonConfigSchema.default({}),
+	expertise: ExpertiseConfigSchema.default({}),
 });
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
@@ -118,7 +129,12 @@ export async function loadConfig(
 	const dir = configDir ?? resolve("config");
 	const raw: Record<string, unknown> = {};
 
-	for (const file of ["persona.yaml", "channels.yaml", "daemon.yaml"]) {
+	for (const file of [
+		"persona.yaml",
+		"channels.yaml",
+		"daemon.yaml",
+		"expertise.yaml",
+	]) {
 		try {
 			const content = await readFile(resolve(dir, file), "utf8");
 			const parsed = parseYaml(substituteEnvVars(content));
