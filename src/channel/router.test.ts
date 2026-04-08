@@ -83,16 +83,16 @@ function makeDeps(overrides: Partial<MessageRouterDeps> = {}): MessageRouterDeps
 		knowledge: {
 			toPromptSection: vi.fn().mockResolvedValue(""),
 		} as unknown as MessageRouterDeps["knowledge"],
+		reflections: {
+			toPromptSection: vi.fn().mockResolvedValue(""),
+		} as unknown as MessageRouterDeps["reflections"],
 		activityTracker: {
 			recordActivity: vi.fn().mockResolvedValue(undefined),
 		} as unknown as MessageRouterDeps["activityTracker"],
 		history: {
 			append: vi.fn().mockResolvedValue(undefined),
-			search: vi.fn().mockResolvedValue([]),
+			getRecent: vi.fn().mockResolvedValue([]),
 		} as unknown as MessageRouterDeps["history"],
-		reflections: {
-			toPromptSection: vi.fn().mockResolvedValue(""),
-		} as unknown as MessageRouterDeps["reflections"],
 		integrator: {
 			integrate: vi.fn().mockResolvedValue(undefined),
 		} as unknown as MessageRouterDeps["integrator"],
