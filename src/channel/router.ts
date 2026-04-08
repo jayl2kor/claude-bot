@@ -26,8 +26,6 @@ import {
 	detectStatusCheck,
 	formatStatusResponse,
 } from "../study/status-checker.js";
-import { detectTeaching } from "../teaching/detector.js";
-import { KnowledgeExtractor } from "../teaching/extractor.js";
 import type { SessionIntegrator } from "../teaching/integrator.js";
 import { logger } from "../utils/logger.js";
 
@@ -183,20 +181,6 @@ export class MessageRouter {
 				}
 				return;
 			}
-		}
-
-		// Real-time teaching detection — store immediately before session
-		const intents = detectTeaching(msg.content);
-		if (intents.length > 0) {
-			const extractor = new KnowledgeExtractor(
-				this.deps.knowledge,
-				this.deps.relationships,
-			);
-			void extractor.extract(intents, msg.userId).catch((err) => {
-				logger.warn("Inline teaching extraction failed", {
-					error: String(err),
-				});
-			});
 		}
 
 		// Build system prompt with persona + memory + channel context
