@@ -12,7 +12,7 @@
  * 6. Edge cases: empty source, all below threshold, all already known.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { KnowledgeEntry } from "../memory/knowledge.js";
 import type { KnowledgePropagatorDeps } from "./knowledge-propagation.js";
 import {
