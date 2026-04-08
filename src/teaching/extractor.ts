@@ -6,6 +6,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import type { FeedPublisher } from "../knowledge-feed/publisher.js";
 import type { KnowledgeEntry } from "../memory/knowledge.js";
 import type { KnowledgeManager } from "../memory/knowledge.js";
 import type { RelationshipManager } from "../memory/relationships.js";
@@ -22,6 +23,7 @@ export class KnowledgeExtractor {
 	constructor(
 		private readonly knowledge: KnowledgeManager,
 		private readonly relationships: RelationshipManager,
+		private readonly feedPublisher?: FeedPublisher,
 	) {}
 
 	/**
@@ -97,6 +99,17 @@ export class KnowledgeExtractor {
 				id: entry.id,
 				source: entry.source,
 			});
+
+			// Publish to shared feed for cross-pet propagation
+			if (this.feedPublisher) {
+				await this.feedPublisher.publish(entry).catch((err) => {
+					logger.warn("Failed to publish knowledge to feed", {
+						id: entry.id,
+						error: String(err),
+					});
+				});
+			}
+
 			stored++;
 		}
 

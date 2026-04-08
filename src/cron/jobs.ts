@@ -9,7 +9,10 @@
 
 import { cleanOldUploads } from "../attachments/cleanup.js";
 import type { CollaborationManager } from "../collaboration/manager.js";
+import type { PeerEvaluator } from "../evaluation/evaluator.js";
 import { spawnClaude } from "../executor/spawner.js";
+import type { FeedStore } from "../knowledge-feed/feed-store.js";
+import type { FeedSubscriber } from "../knowledge-feed/subscriber.js";
 import { analyzeActivity } from "../memory/activity-analyzer.js";
 import type { ActivityTracker } from "../memory/activity.js";
 import type { ChatHistoryManager } from "../memory/history.js";
@@ -22,6 +25,13 @@ import type { SessionStore } from "../session/store.js";
 import { logger } from "../utils/logger.js";
 import type { CronJob } from "./service.js";
 
+export type KnowledgeFeedDeps = {
+	feedStore: FeedStore;
+	feedSubscriber: FeedSubscriber;
+	pollIntervalMs: number;
+	ttlMs: number;
+};
+
 export type CronJobDeps = {
 	persona: PersonaManager;
 	knowledge: KnowledgeManager;
@@ -31,6 +41,8 @@ export type CronJobDeps = {
 	activityTracker: ActivityTracker;
 	history: ChatHistoryManager;
 	collaboration?: CollaborationManager;
+	knowledgeFeed?: KnowledgeFeedDeps;
+	evaluator?: PeerEvaluator;
 	plugins: ChannelPlugin[];
 	/** Upload directory for attachment cleanup. */
 	uploadDir?: string;
@@ -101,6 +113,32 @@ export function createBuiltinJobs(deps: CronJobDeps): CronJob[] {
 						intervalMs: 5_000, // 5 seconds
 						runOnStart: false,
 						handler: () => deps.collaboration!.pollAndExecute(),
+					},
+				]
+			: []),
+		...(deps.evaluator
+			? [
+					{
+						id: "peer-evaluation",
+						intervalMs: 30 * 60 * 1000, // 30 minutes
+						runOnStart: false,
+						handler: () => deps.evaluator!.evaluatePending(),
+					},
+				]
+			: []),
+		...(deps.knowledgeFeed
+			? [
+					{
+						id: "knowledge-feed-poll",
+						intervalMs: deps.knowledgeFeed.pollIntervalMs,
+						runOnStart: false,
+						handler: () => runKnowledgeFeedPoll(deps.knowledgeFeed!),
+					},
+					{
+						id: "knowledge-feed-cleanup",
+						intervalMs: TWELVE_HOURS,
+						runOnStart: false,
+						handler: () => runKnowledgeFeedCleanup(deps.knowledgeFeed!),
 					},
 				]
 			: []),
@@ -357,4 +395,96 @@ async function runUploadCleanup(
 	if (removed > 0) {
 		logger.info("Upload cleanup completed", { removed, retentionDays });
 	}
+}
+
+/**
+ * Knowledge feed poll — import new knowledge from other pets.
+ */
+async function runKnowledgeFeedPoll(deps: KnowledgeFeedDeps): Promise<void> {
+	const result = await deps.feedSubscriber.poll();
+	if (result.imported > 0 || result.skipped > 0) {
+		logger.info("Knowledge feed poll completed", {
+			imported: result.imported,
+			skipped: result.skipped,
+		});
+	}
+}
+
+/**
+ * Knowledge feed cleanup — remove feed entries older than TTL.
+ */
+async function runKnowledgeFeedCleanup(deps: KnowledgeFeedDeps): Promise<void> {
+	const expired = await deps.feedStore.findExpired(deps.ttlMs);
+	let removed = 0;
+
+	for (const entry of expired) {
+		await deps.feedStore.remove(entry.id);
+		removed++;
+	}
+
+	if (removed > 0) {
+		logger.info("Knowledge feed cleanup completed", {
+			removed,
+		});
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Git watcher cron job
+// ---------------------------------------------------------------------------
+
+export type GitWatcherJobDeps = {
+	readonly watcher: import("../git/watcher.js").GitWatcher;
+	readonly reviewer: import("../git/reviewer.js").GitReviewer;
+	readonly plugins: ChannelPlugin[];
+	readonly reviewChannelId: string;
+	readonly pollIntervalMs: number;
+};
+
+export function createGitWatcherJob(deps: GitWatcherJobDeps): CronJob | null {
+	if (!deps.watcher.isActive) return null;
+
+	return {
+		id: "git-watcher",
+		intervalMs: deps.pollIntervalMs,
+		runOnStart: false,
+		handler: () => runGitWatcher(deps),
+	};
+}
+
+async function runGitWatcher(deps: GitWatcherJobDeps): Promise<void> {
+	const { watcher, reviewer, plugins } = deps;
+
+	if (!watcher.isActive || plugins.length === 0) return;
+
+	const plugin = plugins[0];
+	const state = watcher.getState();
+
+	for (const branch of Object.keys(state.lastCheckedSha)) {
+		if (watcher.isRateLimited()) {
+			logger.debug("Git watcher rate limited, skipping", { branch });
+			break;
+		}
+
+		try {
+			const commits = await watcher.poll(branch);
+
+			for (const commit of commits) {
+				if (watcher.isRateLimited()) break;
+
+				const diff = await watcher.getDiff(commit.sha);
+				const message = await reviewer.review(commit, diff);
+				await reviewer.sendReview(plugin, deps.reviewChannelId, message);
+
+				watcher.recordReview();
+			}
+		} catch (err) {
+			logger.error("Git watcher poll failed", {
+				branch,
+				error: String(err),
+			});
+		}
+	}
+
+	await watcher.persistState();
 }

@@ -3,7 +3,7 @@
  * Only active when config.daemon.git.enabled is true.
  */
 
-import { execFile } from "node:child_process";
+import { git } from "../git/exec.js";
 import { logger } from "../utils/logger.js";
 
 type GitConfig = {
@@ -11,20 +11,6 @@ type GitConfig = {
 	branch?: string;
 	autoSync: boolean;
 };
-
-function git(cwd: string, args: string[]): Promise<string> {
-	return new Promise((resolve, reject) => {
-		execFile("git", args, { cwd, timeout: 30_000 }, (err, stdout, stderr) => {
-			if (err) {
-				reject(
-					new Error(`git ${args.join(" ")} failed: ${stderr || err.message}`),
-				);
-			} else {
-				resolve(stdout.trim());
-			}
-		});
-	});
-}
 
 export class GitSync {
 	constructor(
