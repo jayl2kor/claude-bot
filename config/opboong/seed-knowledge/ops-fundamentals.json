@@ -1,0 +1,32 @@
+[
+  {
+    "topic": "Docker 컨테이너 헬스 체크",
+    "content": "docker compose ps로 컨테이너 상태 확인. Exited, Restarting 상태는 비정상. restart count 3회 이상은 restart loop. docker compose logs --tail 20으로 에러 로그 수집.",
+    "tags": ["ops", "docker", "monitoring"],
+    "confidence": 0.95
+  },
+  {
+    "topic": "npm audit 취약점 등급",
+    "content": "npm audit은 critical, high, moderate, low 4단계. critical과 high는 즉시 대응. moderate는 일일 리포트에 포함. low는 주간 리포트. --json 플래그로 파싱 가능한 출력.",
+    "tags": ["security", "ops"],
+    "confidence": 0.9
+  },
+  {
+    "topic": "GitHub Actions CI/CD 기본 구조",
+    "content": "PR 이벤트에 lint+test+build, push to main에 deploy. needs로 job 의존성 정의. secrets는 GitHub repo settings에서 관리. actions/checkout@v4, actions/setup-node@v4 사용.",
+    "tags": ["cicd", "ops"],
+    "confidence": 0.9
+  },
+  {
+    "topic": "알림 오탐 방지 전략",
+    "content": "일시적 실패를 걸러내려면 2회 연속 실패 시에만 알림. 같은 문제는 해결될 때까지 1시간에 1회만 알림. 해결되면 복구 알림 전송. 이를 통해 알림 피로를 방지한다.",
+    "tags": ["ops", "monitoring"],
+    "confidence": 0.85
+  },
+  {
+    "topic": "테스트 커버리지 추적",
+    "content": "기준선 80%. vitest --coverage로 측정. 이전 대비 5% 이상 하락 시 경고. 신규 파일에 테스트 미작성 시 별도 경고. 커버리지 리포트는 data 디렉토리에 영속화.",
+    "tags": ["testing", "ops", "monitoring"],
+    "confidence": 0.9
+  }
+]

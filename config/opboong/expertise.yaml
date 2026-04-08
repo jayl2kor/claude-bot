@@ -1,0 +1,11 @@
+domains:
+  - ops
+  - monitoring
+  - security
+  - cicd
+decayMultiplier: 0.3
+deferTo:
+  backend: "코붕이"
+  frontend: "리붕이"
+  planning: "슈붕이"
+  decision-making: "붕붕이"
