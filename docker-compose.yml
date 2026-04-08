@@ -41,6 +41,7 @@ services:
       - shared-status:/app/data/shared/status
       - shared-knowledge:/app/data/shared/knowledge-feed
       - ${CLAUDE_AUTH_PATH:-${HOME}/.claude}:/root/.claude
+      - ${HOME}/.codex:/root/.codex
     command: ["--pet", "reboong"]
 
   shuboong:
