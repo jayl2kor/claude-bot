@@ -50,6 +50,9 @@ export async function propagateKnowledge(
 	targetPetId: string,
 	deps: KnowledgePropagatorDeps,
 ): Promise<PropagationResult> {
+	if (!sourcePetId.trim()) throw new Error("sourcePetId must not be empty");
+	if (!targetPetId.trim()) throw new Error("targetPetId must not be empty");
+
 	const sourceEntries = await deps.sourceKnowledge.listAll();
 	const targetEntries = await deps.targetKnowledge.listAll();
 	const targetIds = new Set(targetEntries.map((e) => e.id));
@@ -78,6 +81,7 @@ export async function propagateKnowledge(
 		// Upsert into target store with reduced confidence
 		const propagatedEntry: KnowledgeEntry = {
 			...entry,
+			source: "propagated",
 			confidence: propagatedConfidence,
 			updatedAt: now,
 		};
