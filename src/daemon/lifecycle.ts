@@ -430,6 +430,7 @@ export async function runDaemon(
 						plugins,
 						workspacePath: config.daemon.workspacePath ?? "/workspace",
 						model: config.daemon.model,
+						channelId: config.daemon.prReview.channelId || undefined,
 					}
 				: undefined,
 			prResponse: config.daemon.prResponse.enabled
@@ -441,6 +442,7 @@ export async function runDaemon(
 						plugins,
 						workspacePath: config.daemon.workspacePath ?? "/workspace",
 						model: config.daemon.model,
+						channelId: config.daemon.prResponse.channelId || undefined,
 					}
 				: undefined,
 		})) {
