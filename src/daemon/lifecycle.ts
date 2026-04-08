@@ -302,6 +302,7 @@ export async function runDaemon(
 
 		// 11. Wait for shutdown signal
 		await new Promise<void>((resolve) => {
+			if (signal.aborted) return resolve();
 			signal.addEventListener("abort", () => resolve(), { once: true });
 		});
 

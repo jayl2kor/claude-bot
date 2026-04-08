@@ -58,6 +58,7 @@ vi.mock("../channel/telegram/plugin.js", () => ({
 vi.mock("../channel/router.js", () => ({
 	MessageRouter: vi.fn().mockImplementation(() => ({
 		start: vi.fn(),
+		startCommands: vi.fn(async () => {}),
 	})),
 }));
 
@@ -164,6 +165,11 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 			pointerRefreshMs: 300_000,
 			claudeModel: "sonnet",
 			maxTurns: 10,
+			skipPermissions: false,
+			collaboration: {
+				enabled: false,
+				role: "general",
+			},
 		},
 		...overrides,
 	};
@@ -172,6 +178,14 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 function makeAbortController(): { signal: AbortSignal; abort: () => void } {
 	const ctrl = new AbortController();
 	return { signal: ctrl.signal, abort: () => ctrl.abort() };
+}
+
+/**
+ * Aborts the controller on the next event loop tick so that runDaemon has time
+ * to set up its abort listener before the signal fires.
+ */
+function abortNextTick(abort: () => void): void {
+	setImmediate(abort);
 }
 
 async function makeTempDataDir(): Promise<string> {
@@ -193,8 +207,8 @@ describe("runDaemon — CLI fallback", () => {
 		const config = makeConfig({ channels: {} });
 
 		const runPromise = runDaemon(config, signal, dataDir);
-		// Abort immediately to trigger shutdown
-		abort();
+		// Abort on next tick so the abort listener is set up first
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(createCliPlugin).toHaveBeenCalledTimes(1);
@@ -216,7 +230,7 @@ describe("runDaemon — Discord channel", () => {
 		});
 
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(createDiscordPlugin).toHaveBeenCalledTimes(1);
@@ -239,7 +253,7 @@ describe("runDaemon — Telegram channel", () => {
 		});
 
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(createTelegramPlugin).toHaveBeenCalledTimes(1);
@@ -274,7 +288,7 @@ describe("runDaemon — crash recovery pointer", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(readMock).toHaveBeenCalled();
@@ -297,7 +311,7 @@ describe("runDaemon — crash recovery pointer", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(readMock).toHaveBeenCalled();
@@ -321,7 +335,7 @@ describe("runDaemon — process lock", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(acquireMock).toHaveBeenCalledTimes(1);
@@ -378,7 +392,7 @@ describe("runDaemon — shutdown sequence", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(disconnectMock).toHaveBeenCalledTimes(1);
@@ -399,7 +413,7 @@ describe("runDaemon — shutdown sequence", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(shutdownMock).toHaveBeenCalledTimes(1);
@@ -420,7 +434,7 @@ describe("runDaemon — shutdown sequence", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(clearMock).toHaveBeenCalled();
@@ -459,7 +473,7 @@ describe("runDaemon — shutdown sequence", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(order.indexOf("cron-stop")).toBeLessThan(order.indexOf("plugin-disconnect"));
@@ -482,7 +496,7 @@ describe("runDaemon — pointer refresh interval", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		// write() called at least once for initial pointer write
