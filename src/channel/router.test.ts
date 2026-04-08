@@ -393,6 +393,8 @@ describe("MessageRouter smart model selection", () => {
 		await capturedHandler(makeIncomingMessage({ content: "hello" }));
 		const mock = vi.mocked(deps.sessionManager.getOrCreate);
 		expect(mock).toHaveBeenCalledOnce();
+		// getOrCreate(userId, channelId, content, systemPrompt, selectedModel)
+		// selectedModel is index 4 (0-based); when SMS is disabled it should be undefined
 		expect(mock.mock.calls[0]?.[4]).toBeUndefined();
 	});
 
@@ -413,13 +415,9 @@ describe("MessageRouter smart model selection", () => {
 		});
 		const router = new MessageRouter(deps);
 		router.start();
-		await capturedHandler(
-			makeIncomingMessage({
-				content:
-					"\uc774 \uc2dc\uc2a4\ud15c \uc544\ud0a4\ud14d\ucc98\ub97c \uc124\uacc4\ud574\uc918",
-			}),
-		);
+		await capturedHandler(makeIncomingMessage({ content: "이 시스템 아키텍처를 설계해줘" }));
 		const mock = vi.mocked(deps.sessionManager.getOrCreate);
+		// selectedModel is index 4 (0-based) in getOrCreate call
 		expect(mock.mock.calls[0]?.[4]).toBe("opus");
 		expect(mockStats.record).toHaveBeenCalledWith("opus", false);
 	});
@@ -441,8 +439,9 @@ describe("MessageRouter smart model selection", () => {
 		});
 		const router = new MessageRouter(deps);
 		router.start();
-		await capturedHandler(makeIncomingMessage({ content: "\uc548\ub155" }));
+		await capturedHandler(makeIncomingMessage({ content: "안녕" }));
 		const mock = vi.mocked(deps.sessionManager.getOrCreate);
+		// selectedModel is index 4 (0-based) in getOrCreate call
 		expect(mock.mock.calls[0]?.[4]).toBe("haiku");
 		expect(mockStats.record).toHaveBeenCalledWith("haiku", false);
 	});

@@ -72,6 +72,22 @@ vi.mock("../cron/jobs.js", () => ({
 	createBuiltinJobs: vi.fn(() => []),
 }));
 
+vi.mock("../knowledge-feed/feed-store.js", () => ({
+	FeedStore: vi.fn().mockImplementation(() => ({})),
+}));
+
+vi.mock("../knowledge-feed/publisher.js", () => ({
+	FeedPublisher: vi.fn().mockImplementation(() => ({
+		publish: vi.fn(async () => null),
+	})),
+}));
+
+vi.mock("../knowledge-feed/subscriber.js", () => ({
+	FeedSubscriber: vi.fn().mockImplementation(() => ({
+		poll: vi.fn(async () => ({ imported: 0, skipped: 0 })),
+	})),
+}));
+
 vi.mock("../cron/service.js", () => ({
 	CronService: vi.fn().mockImplementation(() => ({
 		add: vi.fn(),
@@ -167,9 +183,12 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 			maxTurns: 10,
 			skipPermissions: false,
 			git: { enabled: false, autoSync: false },
+			gitWatcher: { enabled: false, branches: ["main"], pollIntervalMs: 60_000, maxReviewsPerHour: 5, ignoreAuthors: [], reviewChannelId: "", maxDiffChars: 4000 },
 			collaboration: { enabled: false, role: "general" },
+			growthReport: { enabled: false, intervalMs: 604800000, language: "ko" },
 			smartModelSelection: { enabled: false, defaultModel: "sonnet" },
 			attachments: { maxFileSizeMb: 10, maxTotalSizeMb: 25, retentionDays: 7 },
+			knowledgeFeed: { enabled: false, pollIntervalMs: 30_000, ttlMs: 604800000, confidenceMultiplier: 0.7 },
 			evaluation: { enabled: false, probability: 0.3, maxPendingCount: 5 },
 		},
 		...overrides,

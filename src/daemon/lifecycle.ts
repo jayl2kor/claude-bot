@@ -11,11 +11,20 @@ import { MessageRouter } from "../channel/router.js";
 import { createTelegramPlugin } from "../channel/telegram/plugin.js";
 import { CollaborationManager } from "../collaboration/manager.js";
 import { ContextBuilder } from "../context/builder.js";
-import { createBuiltinJobs } from "../cron/jobs.js";
+import { createBuiltinJobs, createGitWatcherJob, createGrowthReportJob } from "../cron/jobs.js";
+import type { KnowledgeFeedDeps } from "../cron/jobs.js";
 import { CronService } from "../cron/service.js";
 import { EvaluationPublisher } from "../evaluation/publisher.js";
 import { EvaluationStore } from "../evaluation/store.js";
 import { PeerEvaluator } from "../evaluation/evaluator.js";
+import { GitReviewer } from "../git/reviewer.js";
+import { GitWatcher } from "../git/watcher.js";
+import { GrowthCollector } from "../growth/collector.js";
+import { FileReportHistoryStore } from "../growth/history-store.js";
+import { GrowthReporter } from "../growth/reporter.js";
+import { FeedStore } from "../knowledge-feed/feed-store.js";
+import { FeedPublisher } from "../knowledge-feed/publisher.js";
+import { FeedSubscriber } from "../knowledge-feed/subscriber.js";
 import { ActivityTracker } from "../memory/activity.js";
 import { ChatHistoryManager } from "../memory/history.js";
 import { KnowledgeManager } from "../memory/knowledge.js";
@@ -186,20 +195,57 @@ export async function runDaemon(
 			logger.info("Channel connected", { channel: plugin.id });
 		}
 
-		// 8. Initialize teaching pipeline
+		// 8. Initialize knowledge feed (optional)
+		const feedConfig = config.daemon.knowledgeFeed;
+		let feedPublisher: FeedPublisher | undefined;
+		let knowledgeFeedDeps: KnowledgeFeedDeps | undefined;
+
+		if (feedConfig?.enabled) {
+			const feedSharedDir = resolve(
+				feedConfig.sharedDir ??
+					resolve(DATA_DIR, "..", "shared", "knowledge-feed"),
+			);
+			const feedStore = new FeedStore(feedSharedDir);
+			feedPublisher = new FeedPublisher(feedStore, config.persona.name);
+			const feedSubscriber = new FeedSubscriber({
+				feedStore,
+				knowledge,
+				petId: config.persona.name,
+				stateDir: resolve(DATA_DIR, "state"),
+				confidenceMultiplier: feedConfig.confidenceMultiplier,
+			});
+			knowledgeFeedDeps = {
+				feedStore,
+				feedSubscriber,
+				pollIntervalMs: feedConfig.pollIntervalMs,
+				ttlMs: feedConfig.ttlMs,
+			};
+			logger.info("Knowledge feed enabled", {
+				sharedDir: feedSharedDir,
+				pollIntervalMs: feedConfig.pollIntervalMs,
+				confidenceMultiplier: feedConfig.confidenceMultiplier,
+			});
+		}
+
+		// 8b. Initialize teaching pipeline
 		const integrator = new SessionIntegrator(
 			knowledge,
 			reflections,
 			relationships,
+			feedPublisher,
 		);
 
-		// 8b. Initialize smart model selection (optional)
+		// 8c. Initialize smart model selection (optional)
 		const smsConfig = config.daemon.smartModelSelection;
 		const modelStatsTracker = new ModelStatsTracker(
 			resolve(DATA_DIR, "model-stats"),
 		);
 		const smartModelSelection = smsConfig.enabled
-			? { enabled: true as const, statsTracker: modelStatsTracker }
+			? {
+					enabled: true as const,
+					statsTracker: modelStatsTracker,
+					defaultModel: smsConfig.defaultModel,
+				}
 			: undefined;
 
 		if (smsConfig.enabled) {
@@ -289,6 +335,7 @@ export async function runDaemon(
 			activityTracker,
 			history,
 			collaboration,
+			knowledgeFeed: knowledgeFeedDeps,
 			evaluator: peerEvaluator,
 			plugins,
 			uploadDir,
@@ -304,9 +351,81 @@ export async function runDaemon(
 				handler: () => statusWriter.write(),
 			});
 		}
+
+		// 11b. Growth report cron job (optional, disabled by default)
+		const growthReportConfig = config.daemon.growthReport;
+		if (growthReportConfig.enabled) {
+			const growthCollector = new GrowthCollector({
+				knowledge,
+				relationships,
+				reflections,
+				sessionStore,
+				activityTracker,
+				persona: personaManager,
+			});
+			const growthHistoryStore = new FileReportHistoryStore(
+				resolve(DATA_DIR, "memory", "growth-reports"),
+			);
+			const growthReporter = new GrowthReporter({
+				personaName: config.persona.name,
+				language: growthReportConfig.language,
+				historyStore: growthHistoryStore,
+			});
+			const growthJob = createGrowthReportJob({
+				growthReportConfig,
+				collector: growthCollector,
+				reporter: growthReporter,
+				plugins,
+			});
+			if (growthJob) {
+				cronService.add(growthJob);
+				logger.info("Growth report job registered", {
+					intervalMs: growthReportConfig.intervalMs,
+					channelId: growthReportConfig.channelId,
+				});
+			}
+		}
+
+		// 11c. Git watcher cron job (optional, disabled by default)
+		const gitWatcherConfig = config.daemon.gitWatcher;
+		if (gitWatcherConfig.enabled && config.daemon.workspacePath) {
+			if (!gitWatcherConfig.reviewChannelId) {
+				logger.warn(
+					"GitWatcher: reviewChannelId is empty — reviews will not be delivered. Set daemon.gitWatcher.reviewChannelId in your config.",
+				);
+			}
+
+			const gitWatcher = new GitWatcher(
+				config.daemon.workspacePath,
+				gitWatcherConfig,
+				resolve(DATA_DIR, "state"),
+			);
+			await gitWatcher.init();
+
+			const gitReviewer = new GitReviewer(
+				config.persona.name,
+				config.persona.personality,
+			);
+
+			const gitWatcherJob = createGitWatcherJob({
+				watcher: gitWatcher,
+				reviewer: gitReviewer,
+				plugins,
+				reviewChannelId: gitWatcherConfig.reviewChannelId,
+				pollIntervalMs: gitWatcherConfig.pollIntervalMs,
+			});
+			if (gitWatcherJob) {
+				cronService.add(gitWatcherJob);
+				logger.info("Git watcher job registered", {
+					branches: gitWatcherConfig.branches,
+					pollIntervalMs: gitWatcherConfig.pollIntervalMs,
+				});
+			}
+		}
+
 		await cronService.start(signal);
 
-		// 11. Write initial pointer
+		// 12. Write initial pointer
 		const writePointerState = async () => {
 			const p: DaemonPointer = {
 				activeSessions: sessionManager.getActiveSessionKeys().map((key) => {
@@ -324,7 +443,7 @@ export async function runDaemon(
 		};
 		await writePointerState();
 
-		// 10. Start pointer refresh interval
+		// 13. Start pointer refresh interval
 		const pointerInterval = setInterval(
 			() => void writePointerState(),
 			config.daemon.pointerRefreshMs,
@@ -335,7 +454,7 @@ export async function runDaemon(
 			persona: config.persona.name,
 		});
 
-		// 11. Wait for shutdown signal
+		// 14. Wait for shutdown signal
 		await new Promise<void>((resolve) => {
 			if (signal.aborted) return resolve();
 			signal.addEventListener("abort", () => resolve(), { once: true });

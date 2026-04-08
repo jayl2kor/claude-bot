@@ -18,6 +18,8 @@ export interface ClassificationContext {
 	timestamp: number;
 	previousModel?: ModelTier;
 	previousTimestamp?: number;
+	/** Fallback model tier when no rule matches. Defaults to "sonnet". */
+	defaultModel?: ModelTier;
 }
 
 export interface DailyModelStats {
