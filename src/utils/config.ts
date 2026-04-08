@@ -85,6 +85,16 @@ const KnowledgeFeedConfigSchema = z.object({
 	sharedDir: z.string().optional(),
 });
 
+const PRReviewCronSchema = z.object({
+	enabled: z.boolean().default(false),
+	pollIntervalMs: z.number().default(5 * 60 * 1000),
+});
+
+const PRResponseCronSchema = z.object({
+	enabled: z.boolean().default(false),
+	pollIntervalMs: z.number().default(5 * 60 * 1000),
+});
+
 const EvaluationConfigSchema = z.object({
 	enabled: z.boolean().default(false),
 	sharedDir: z.string().optional(),
@@ -114,6 +124,8 @@ const DaemonConfigSchema = z
 		knowledgeFeed: KnowledgeFeedConfigSchema.default({}),
 		study: StudyConfigSchema.default({}),
 		evaluation: EvaluationConfigSchema.default({}),
+		prReview: PRReviewCronSchema.default({}),
+		prResponse: PRResponseCronSchema.default({}),
 	})
 	.transform((daemon) => {
 		const resolvedModel = daemon.model ?? daemon.claudeModel ?? "sonnet";

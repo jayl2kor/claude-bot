@@ -9,11 +9,11 @@
  */
 
 import { cleanOldUploads } from "../attachments/cleanup.js";
-import type { CollaborationManager } from "../collaboration/manager.js";
 import { propagateKnowledge } from "../collaboration/knowledge-propagation.js";
-import type { ExpertiseConfig } from "../expertise/types.js";
+import type { CollaborationManager } from "../collaboration/manager.js";
 import type { PeerEvaluator } from "../evaluation/evaluator.js";
 import { spawnClaude } from "../executor/spawner.js";
+import type { ExpertiseConfig } from "../expertise/types.js";
 import { GrowthCollector } from "../growth/collector.js";
 import type { GrowthReporter } from "../growth/reporter.js";
 import type { FeedStore } from "../knowledge-feed/feed-store.js";
@@ -29,6 +29,11 @@ import type { ChannelPlugin } from "../plugins/types.js";
 import type { SessionStore } from "../session/store.js";
 import type { GrowthReportConfig } from "../utils/config.js";
 import { logger } from "../utils/logger.js";
+import {
+	type PRReviewConfig,
+	runPRResponse,
+	runPRReview,
+} from "./pr-review.js";
 import type { CronJob } from "./service.js";
 
 export type PeerKnowledge = {
@@ -63,6 +68,10 @@ export type CronJobDeps = {
 	/** Attachment retention in days (default: 7). */
 	attachmentRetentionDays?: number;
 	expertiseConfig?: ExpertiseConfig;
+	/** PR review config for review/response cron jobs. */
+	prReview?: PRReviewConfig;
+	/** PR response config for responding to reviews on my PRs. */
+	prResponse?: PRReviewConfig;
 };
 
 const ONE_HOUR = 60 * 60 * 1000;
@@ -171,6 +180,26 @@ export function createBuiltinJobs(deps: CronJobDeps): CronJob[] {
 						intervalMs: TWELVE_HOURS,
 						runOnStart: false,
 						handler: () => runKnowledgeFeedCleanup(deps.knowledgeFeed!),
+					},
+				]
+			: []),
+		...(deps.prReview
+			? [
+					{
+						id: "pr-review",
+						intervalMs: deps.prReview.pollIntervalMs,
+						runOnStart: false,
+						handler: () => runPRReview(deps.prReview!),
+					},
+				]
+			: []),
+		...(deps.prResponse
+			? [
+					{
+						id: "pr-response",
+						intervalMs: deps.prResponse.pollIntervalMs,
+						runOnStart: false,
+						handler: () => runPRResponse(deps.prResponse!),
 					},
 				]
 			: []),
@@ -428,7 +457,10 @@ async function runMemoryDecay(deps: CronJobDeps): Promise<void> {
 	try {
 		await deps.knowledge.applyDecayAll();
 	} catch (err) {
-		logger.error("Memory decay (applyDecayAll) failed — skipping archiveWeak to prevent data loss", { err });
+		logger.error(
+			"Memory decay (applyDecayAll) failed — skipping archiveWeak to prevent data loss",
+			{ err },
+		);
 		throw err;
 	}
 

@@ -421,6 +421,28 @@ export async function runDaemon(
 			expertiseConfig: config.expertise,
 			uploadDir,
 			attachmentRetentionDays: attachmentConfig.retentionDays,
+			prReview: config.daemon.prReview.enabled
+				? {
+						enabled: true,
+						pollIntervalMs: config.daemon.prReview.pollIntervalMs,
+						petId: config.persona.name,
+						persona: personaManager,
+						plugins,
+						workspacePath: config.daemon.workspacePath ?? "/workspace",
+						model: config.daemon.model,
+					}
+				: undefined,
+			prResponse: config.daemon.prResponse.enabled
+				? {
+						enabled: true,
+						pollIntervalMs: config.daemon.prResponse.pollIntervalMs,
+						petId: config.persona.name,
+						persona: personaManager,
+						plugins,
+						workspacePath: config.daemon.workspacePath ?? "/workspace",
+						model: config.daemon.model,
+					}
+				: undefined,
 		})) {
 			cronService.add(job);
 		}
