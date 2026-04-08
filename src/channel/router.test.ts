@@ -7,11 +7,11 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MessageRouter } from "./router.js";
-import type { MessageRouterDeps } from "./router.js";
-import type { ChannelPlugin, IncomingMessage } from "../plugins/types.js";
 import type { SessionHandle } from "../executor/spawner.js";
 import type { SessionDoneStatus } from "../executor/types.js";
+import type { ChannelPlugin, IncomingMessage } from "../plugins/types.js";
+import { MessageRouter } from "./router.js";
+import type { MessageRouterDeps } from "./router.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -50,7 +50,9 @@ function makePlugin(overrides: Partial<ChannelPlugin> = {}): ChannelPlugin {
 	};
 }
 
-function makeIncomingMessage(overrides: Partial<IncomingMessage> = {}): IncomingMessage {
+function makeIncomingMessage(
+	overrides: Partial<IncomingMessage> = {},
+): IncomingMessage {
 	return {
 		id: "msg-1",
 		userId: "user1",
@@ -62,7 +64,9 @@ function makeIncomingMessage(overrides: Partial<IncomingMessage> = {}): Incoming
 	};
 }
 
-function makeDeps(overrides: Partial<MessageRouterDeps> = {}): MessageRouterDeps {
+function makeDeps(
+	overrides: Partial<MessageRouterDeps> = {},
+): MessageRouterDeps {
 	return {
 		sessionManager: {
 			getOrCreate: vi.fn().mockResolvedValue(makeHandle()),
@@ -83,6 +87,15 @@ function makeDeps(overrides: Partial<MessageRouterDeps> = {}): MessageRouterDeps
 		knowledge: {
 			toPromptSection: vi.fn().mockResolvedValue(""),
 		} as unknown as MessageRouterDeps["knowledge"],
+		reflections: {
+			getRecent: vi.fn().mockResolvedValue([]),
+		} as unknown as MessageRouterDeps["reflections"],
+		activityTracker: {
+			recordActivity: vi.fn().mockResolvedValue(undefined),
+		} as unknown as MessageRouterDeps["activityTracker"],
+		history: {
+			append: vi.fn().mockResolvedValue(undefined),
+		} as unknown as MessageRouterDeps["history"],
 		integrator: {
 			integrate: vi.fn().mockResolvedValue(undefined),
 		} as unknown as MessageRouterDeps["integrator"],
@@ -194,7 +207,9 @@ describe("MessageRouter prompt injection boundary (CRITICAL #1)", () => {
 		const buildMock = vi.fn().mockResolvedValue("clean system prompt");
 		const deps = makeDeps({
 			plugins: [plugin],
-			contextBuilder: { build: buildMock } as unknown as MessageRouterDeps["contextBuilder"],
+			contextBuilder: {
+				build: buildMock,
+			} as unknown as MessageRouterDeps["contextBuilder"],
 		});
 		const router = new MessageRouter(deps);
 		router.start();
@@ -238,7 +253,9 @@ describe("MessageRouter prompt injection boundary (CRITICAL #1)", () => {
 				shutdown: vi.fn(),
 				getActiveSessionKeys: vi.fn().mockReturnValue([]),
 			} as unknown as MessageRouterDeps["sessionManager"],
-			integrator: { integrate: integrateMock } as unknown as MessageRouterDeps["integrator"],
+			integrator: {
+				integrate: integrateMock,
+			} as unknown as MessageRouterDeps["integrator"],
 		});
 		const router = new MessageRouter(deps);
 		router.start();
@@ -355,7 +372,9 @@ describe("MessageRouter error handling (MEDIUM #6)", () => {
 		const router = new MessageRouter(deps);
 		router.start();
 
-		await expect(capturedHandler(makeIncomingMessage({ id: "rec-err" }))).resolves.not.toThrow();
+		await expect(
+			capturedHandler(makeIncomingMessage({ id: "rec-err" })),
+		).resolves.not.toThrow();
 	});
 });
 
@@ -364,20 +383,24 @@ describe("MessageRouter smart model selection", () => {
 	it("does not set model when smartModelSelection disabled", async () => {
 		const plugin = makePlugin();
 		let capturedHandler!: (msg: IncomingMessage) => Promise<void>;
-		vi.mocked(plugin.onMessage).mockImplementation((h) => { capturedHandler = h; });
+		vi.mocked(plugin.onMessage).mockImplementation((h) => {
+			capturedHandler = h;
+		});
 		const deps = makeDeps({ plugins: [plugin] });
 		const router = new MessageRouter(deps);
 		router.start();
 		await capturedHandler(makeIncomingMessage({ content: "hello" }));
 		const mock = vi.mocked(deps.sessionManager.getOrCreate);
 		expect(mock).toHaveBeenCalledOnce();
-		expect(mock.mock.calls[0]?.[5]).toBeUndefined();
+		expect(mock.mock.calls[0]?.[4]).toBeUndefined();
 	});
 
 	it("selects opus for complexity keywords", async () => {
 		const plugin = makePlugin();
 		let capturedHandler!: (msg: IncomingMessage) => Promise<void>;
-		vi.mocked(plugin.onMessage).mockImplementation((h) => { capturedHandler = h; });
+		vi.mocked(plugin.onMessage).mockImplementation((h) => {
+			capturedHandler = h;
+		});
 		const mockStats = {
 			getSessionModel: vi.fn().mockReturnValue(undefined),
 			setSessionModel: vi.fn(),
@@ -389,16 +412,23 @@ describe("MessageRouter smart model selection", () => {
 		});
 		const router = new MessageRouter(deps);
 		router.start();
-		await capturedHandler(makeIncomingMessage({ content: "\uc774 \uc2dc\uc2a4\ud15c \uc544\ud0a4\ud14d\ucc98\ub97c \uc124\uacc4\ud574\uc918" }));
+		await capturedHandler(
+			makeIncomingMessage({
+				content:
+					"\uc774 \uc2dc\uc2a4\ud15c \uc544\ud0a4\ud14d\ucc98\ub97c \uc124\uacc4\ud574\uc918",
+			}),
+		);
 		const mock = vi.mocked(deps.sessionManager.getOrCreate);
-		expect(mock.mock.calls[0]?.[5]).toBe("opus");
+		expect(mock.mock.calls[0]?.[4]).toBe("opus");
 		expect(mockStats.record).toHaveBeenCalledWith("opus", false);
 	});
 
 	it("selects haiku for greeting", async () => {
 		const plugin = makePlugin();
 		let capturedHandler!: (msg: IncomingMessage) => Promise<void>;
-		vi.mocked(plugin.onMessage).mockImplementation((h) => { capturedHandler = h; });
+		vi.mocked(plugin.onMessage).mockImplementation((h) => {
+			capturedHandler = h;
+		});
 		const mockStats = {
 			getSessionModel: vi.fn().mockReturnValue(undefined),
 			setSessionModel: vi.fn(),
@@ -412,7 +442,7 @@ describe("MessageRouter smart model selection", () => {
 		router.start();
 		await capturedHandler(makeIncomingMessage({ content: "\uc548\ub155" }));
 		const mock = vi.mocked(deps.sessionManager.getOrCreate);
-		expect(mock.mock.calls[0]?.[5]).toBe("haiku");
+		expect(mock.mock.calls[0]?.[4]).toBe("haiku");
 		expect(mockStats.record).toHaveBeenCalledWith("haiku", false);
 	});
 });
