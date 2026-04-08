@@ -8,6 +8,7 @@
  */
 
 import type { CollaborationManager } from "../collaboration/manager.js";
+import type { PeerEvaluator } from "../evaluation/evaluator.js";
 import { spawnClaude } from "../executor/spawner.js";
 import type { FeedStore } from "../knowledge-feed/feed-store.js";
 import type { FeedSubscriber } from "../knowledge-feed/subscriber.js";
@@ -40,6 +41,7 @@ export type CronJobDeps = {
 	history: ChatHistoryManager;
 	collaboration?: CollaborationManager;
 	knowledgeFeed?: KnowledgeFeedDeps;
+	evaluator?: PeerEvaluator;
 	plugins: ChannelPlugin[];
 };
 
@@ -92,6 +94,16 @@ export function createBuiltinJobs(deps: CronJobDeps): CronJob[] {
 						intervalMs: 5_000, // 5 seconds
 						runOnStart: false,
 						handler: () => deps.collaboration!.pollAndExecute(),
+					},
+				]
+			: []),
+		...(deps.evaluator
+			? [
+					{
+						id: "peer-evaluation",
+						intervalMs: 30 * 60 * 1000, // 30 minutes
+						runOnStart: false,
+						handler: () => deps.evaluator!.evaluatePending(),
 					},
 				]
 			: []),

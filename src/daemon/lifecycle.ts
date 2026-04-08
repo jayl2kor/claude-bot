@@ -14,6 +14,9 @@ import { ContextBuilder } from "../context/builder.js";
 import { createBuiltinJobs } from "../cron/jobs.js";
 import type { KnowledgeFeedDeps } from "../cron/jobs.js";
 import { CronService } from "../cron/service.js";
+import { EvaluationPublisher } from "../evaluation/publisher.js";
+import { EvaluationStore } from "../evaluation/store.js";
+import { PeerEvaluator } from "../evaluation/evaluator.js";
 import { FeedStore } from "../knowledge-feed/feed-store.js";
 import { FeedPublisher } from "../knowledge-feed/publisher.js";
 import { FeedSubscriber } from "../knowledge-feed/subscriber.js";
@@ -257,7 +260,46 @@ export async function runDaemon(
 				})
 			: undefined;
 
-		// 11. Initialize and start cron service
+		// 11. Initialize evaluation (optional)
+		const evalConfig = config.daemon.evaluation;
+		let evaluationPublisher: EvaluationPublisher | undefined;
+		let peerEvaluator: PeerEvaluator | undefined;
+		if (evalConfig.enabled) {
+			const evalSharedDir = resolve(
+				evalConfig.sharedDir ?? resolve(DATA_DIR, "..", "shared", "evaluations"),
+			);
+			const evalStore = new EvaluationStore(evalSharedDir);
+			evaluationPublisher = new EvaluationPublisher(
+				config.persona.name,
+				evalSharedDir,
+				evalConfig.probability,
+				evalConfig.maxPendingCount,
+			);
+			peerEvaluator = new PeerEvaluator(config.persona.name, evalStore);
+			logger.info("Peer evaluation enabled", {
+				sharedDir: evalSharedDir,
+				probability: evalConfig.probability,
+			});
+		}
+
+		// Wire onDone callback on sessionManager to trigger evaluation publishing
+		if (evaluationPublisher) {
+			const publisher = evaluationPublisher;
+			sessionManager.onDone((sessionKey, status) => {
+				if (status !== "completed") return;
+				// Extract userId:channelId from potentially timestamped key
+				const parts = sessionKey.split(":");
+				const userId = parts[0];
+				const channelId = parts[1];
+				if (!userId || !channelId) {
+					logger.warn("EvaluationPublisher: skipped — malformed sessionKey", { sessionKey });
+					return;
+				}
+				void publisher.maybePublish(sessionKey, userId, channelId, history);
+			});
+		}
+
+		// 12. Initialize and start cron service
 		const cronService = new CronService();
 		for (const job of createBuiltinJobs({
 			persona: personaManager,
@@ -269,6 +311,7 @@ export async function runDaemon(
 			history,
 			collaboration,
 			knowledgeFeed: knowledgeFeedDeps,
+			evaluator: peerEvaluator,
 			plugins,
 		})) {
 			cronService.add(job);
@@ -314,6 +357,7 @@ export async function runDaemon(
 
 		// 14. Wait for shutdown signal
 		await new Promise<void>((resolve) => {
+			if (signal.aborted) return resolve();
 			signal.addEventListener("abort", () => resolve(), { once: true });
 		});
 
