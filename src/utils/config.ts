@@ -40,6 +40,14 @@ const CollaborationConfigSchema = z.object({
 	sharedDir: z.string().optional(),
 });
 
+const StudyConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	maxDailySessions: z.number().default(5),
+	maxSubTopics: z.number().default(8),
+	model: z.string().default("sonnet"),
+	maxTurns: z.number().default(3),
+});
+
 const DaemonConfigSchema = z.object({
 	maxConcurrentSessions: z.number().default(10),
 	sessionTimeoutMs: z.number().default(30 * 60 * 1000),
@@ -51,6 +59,7 @@ const DaemonConfigSchema = z.object({
 	sharedStatusDir: z.string().optional(),
 	git: GitConfigSchema.default({}),
 	collaboration: CollaborationConfigSchema.default({}),
+	study: StudyConfigSchema.default({}),
 });
 
 export const AppConfigSchema = z.object({

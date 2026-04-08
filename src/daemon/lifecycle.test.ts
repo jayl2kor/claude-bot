@@ -9,10 +9,10 @@
  * All heavy dependencies are mocked to keep tests unit-level.
  */
 
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
+import { mkdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -118,6 +118,25 @@ vi.mock("../teaching/integrator.js", () => ({
 	})),
 }));
 
+vi.mock("../study/queue.js", () => ({
+	StudyQueue: vi.fn().mockImplementation(() => ({
+		setResearcher: vi.fn(),
+		setNotifyFn: vi.fn(),
+		enqueue: vi.fn(async () => ({ success: true })),
+		getState: vi.fn(async () => ({
+			requests: [],
+			dailyCount: 0,
+			dailyResetAt: 0,
+		})),
+	})),
+}));
+
+vi.mock("../study/researcher.js", () => ({
+	TopicResearcher: vi.fn().mockImplementation(() => ({
+		research: vi.fn(async () => ({ subtopics: [], knowledgeIds: [] })),
+	})),
+}));
+
 vi.mock("../utils/sleep.js", () => ({
 	sleep: vi.fn(async () => {}),
 }));
@@ -141,8 +160,8 @@ vi.mock("./pointer.js", () => ({
 // Import after mocks
 // ---------------------------------------------------------------------------
 
-import { runDaemon } from "./lifecycle.js";
 import type { AppConfig } from "../utils/config.js";
+import { runDaemon } from "./lifecycle.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -164,6 +183,13 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 			pointerRefreshMs: 300_000,
 			claudeModel: "sonnet",
 			maxTurns: 10,
+			study: {
+				enabled: false,
+				maxDailySessions: 5,
+				maxSubTopics: 8,
+				model: "sonnet",
+				maxTurns: 3,
+			},
 		},
 		...overrides,
 	};
@@ -203,7 +229,9 @@ describe("runDaemon — CLI fallback", () => {
 
 describe("runDaemon — Discord channel", () => {
 	it("initializes discord plugin when discord config present", async () => {
-		const { createDiscordPlugin } = await import("../channel/discord/plugin.js");
+		const { createDiscordPlugin } = await import(
+			"../channel/discord/plugin.js"
+		);
 		const { createCliPlugin } = await import("../channel/cli/plugin.js");
 		vi.mocked(createDiscordPlugin).mockClear();
 		vi.mocked(createCliPlugin).mockClear();
@@ -226,7 +254,9 @@ describe("runDaemon — Discord channel", () => {
 
 describe("runDaemon — Telegram channel", () => {
 	it("initializes telegram plugin when telegram config present", async () => {
-		const { createTelegramPlugin } = await import("../channel/telegram/plugin.js");
+		const { createTelegramPlugin } = await import(
+			"../channel/telegram/plugin.js"
+		);
 		const { createCliPlugin } = await import("../channel/cli/plugin.js");
 		vi.mocked(createTelegramPlugin).mockClear();
 		vi.mocked(createCliPlugin).mockClear();
@@ -252,9 +282,7 @@ describe("runDaemon — crash recovery pointer", () => {
 		const { PointerManager } = await import("./pointer.js");
 
 		const existingPointer = {
-			activeSessions: [
-				{ sessionKey: "u1:c1", channelId: "c1", userId: "u1" },
-			],
+			activeSessions: [{ sessionKey: "u1:c1", channelId: "c1", userId: "u1" }],
 			startedAt: Date.now() - 5000,
 			pid: 99999,
 		};
@@ -352,7 +380,9 @@ describe("runDaemon — process lock", () => {
 
 		const config = makeConfig({ channels: {} });
 
-		await expect(runDaemon(config, signal, dataDir)).rejects.toThrow("write error");
+		await expect(runDaemon(config, signal, dataDir)).rejects.toThrow(
+			"write error",
+		);
 		expect(releaseMock).toHaveBeenCalledTimes(1);
 	});
 });
@@ -462,7 +492,9 @@ describe("runDaemon — shutdown sequence", () => {
 		abort();
 		await runPromise;
 
-		expect(order.indexOf("cron-stop")).toBeLessThan(order.indexOf("plugin-disconnect"));
+		expect(order.indexOf("cron-stop")).toBeLessThan(
+			order.indexOf("plugin-disconnect"),
+		);
 	});
 });
 
