@@ -1,0 +1,62 @@
+[
+  {
+    "topic": "이슈 분할 기준",
+    "content": "하나의 이슈는 1~3일 작업량이 적절하다. 서로 다른 모듈을 수정하거나 독립적으로 테스트 가능한 단위는 별도 이슈로 분할한다. 파일 변경이 15개 이상이면 분할을 고려한다.",
+    "tags": ["planning", "issue-management"],
+    "confidence": 0.95
+  },
+  {
+    "topic": "기술 이슈 작성법",
+    "content": "좋은 기술 이슈는 배경(Why), 목표(What), 설계(How), 구현 계획(Phase별 체크리스트), 파일 변경 요약(테이블), 리스크 대응, 완료 기준을 포함한다. 개발자가 이슈만 보고 바로 작업 가능해야 한다.",
+    "tags": ["planning", "issue-management", "requirements"],
+    "confidence": 0.95
+  },
+  {
+    "topic": "PRD 작성법",
+    "content": "PRD(Product Requirements Document)는 개요, 배경/동기, 목표 사용자, 유저 스토리, 기능 요구사항(P0/P1/P2 우선순위), 비기능 요구사항, 제약 조건, 성공 지표, 범위 밖(Out of Scope)을 포함한다. 형님의 막연한 아이디어를 구체적 요구사항으로 변환하는 첫 단계다.",
+    "tags": ["planning", "product-management", "requirements"],
+    "confidence": 0.95
+  },
+  {
+    "topic": "유저 스토리 작성법",
+    "content": "유저 스토리 포맷: '사용자로서, ~을 하고 싶다, 왜냐하면 ~이기 때문이다.' 각 유저 스토리에는 수용 기준(Acceptance Criteria)을 명시한다. 수용 기준은 테스트로 검증 가능해야 한다.",
+    "tags": ["planning", "product-management", "requirements"],
+    "confidence": 0.95
+  },
+  {
+    "topic": "기능 우선순위 결정 (P0/P1/P2)",
+    "content": "P0(필수): 이게 없으면 제품이 동작하지 않음. P1(중요): 사용성에 큰 영향, 출시 전 필요. P2(있으면 좋음): 편의 기능, 다음 버전 가능. 우선순위 결정 시 가치/비용 매트릭스를 사용한다.",
+    "tags": ["planning", "product-management"],
+    "confidence": 0.9
+  },
+  {
+    "topic": "요구사항 분석 프로세스",
+    "content": "요구사항 분석은 기능 요구사항(무엇이 동작해야 하는가), 비기능 요구사항(성능, 보안, 확장성), 제약 조건(시간, 기술, 호환성), 가정(전제 조건)으로 구분한다.",
+    "tags": ["planning", "requirements", "product-management"],
+    "confidence": 0.9
+  },
+  {
+    "topic": "의존성 관리와 순서 결정",
+    "content": "이슈 간 의존성은 DAG(방향 비순환 그래프)로 모델링한다. 기반 인프라 → 코어 로직 → 통합 → UI 순서가 일반적. 의존성이 없는 이슈는 병렬 처리 가능.",
+    "tags": ["planning", "architecture"],
+    "confidence": 0.9
+  },
+  {
+    "topic": "코드베이스 탐색 전략",
+    "content": "새 프로젝트를 분석할 때: 1) README/CLAUDE.md 확인, 2) package.json/go.mod 등으로 기술 스택 파악, 3) src/ 디렉토리 구조로 아키텍처 이해, 4) 기존 이슈/PR로 맥락 파악, 5) 테스트 파일로 동작 이해.",
+    "tags": ["planning", "architecture", "requirements"],
+    "confidence": 0.9
+  },
+  {
+    "topic": "기획 산출물 버전 관리",
+    "content": "기획 산출물(PRD, 유저 스토리, 리서치, 아키텍처 설계, 백로그)은 docs/planning/ 하위에 저장하고 git으로 버전 관리한다. 각 산출물 완료 시 즉시 커밋한다. 이슈 생성은 산출물 커밋 이후에 진행한다.",
+    "tags": ["planning", "product-management"],
+    "confidence": 0.9
+  },
+  {
+    "topic": "리스크 분석 프레임워크",
+    "content": "각 리스크에 대해 발생 가능성(높/중/낮)과 영향도(높/중/낮)를 평가한다. 대응 방안은 회피(설계 변경), 완화(영향 축소), 수용(감수), 전가(다른 방법) 중 선택.",
+    "tags": ["planning", "product-management"],
+    "confidence": 0.85
+  }
+]

@@ -1,0 +1,12 @@
+domains:
+  - planning
+  - issue-management
+  - product-management
+  - requirements
+  - architecture
+decayMultiplier: 0.3
+deferTo:
+  backend: "코붕이"
+  frontend: "리붕이"
+  ops: "옵붕이"
+  decision-making: "붕붕이"

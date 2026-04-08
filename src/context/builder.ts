@@ -16,10 +16,7 @@ import type { ReflectionManager } from "../memory/reflection.js";
 import type { RelationshipManager } from "../memory/relationships.js";
 import type { ChannelChatMessage } from "../plugins/types.js";
 import type { StatusReader } from "../status/reader.js";
-import {
-	estimateTokens,
-	truncateToTokenBudget,
-} from "../utils/tokens.js";
+import { truncateToTokenBudget } from "../utils/tokens.js";
 
 export type ContextBuilderDeps = {
 	persona: PersonaManager;
@@ -30,6 +27,8 @@ export type ContextBuilderDeps = {
 	statusReader?: StatusReader;
 	/** Path to a knowledge.md file with static knowledge for this pet. */
 	knowledgeFilePath?: string;
+	/** Path to common knowledge.md shared by all pets. */
+	commonKnowledgeFilePath?: string;
 	/** Expertise domain knowledge docs loader. */
 	expertiseDocLoader?: ExpertiseDocLoader;
 	/** Delegation builder for cross-pet topic routing. */
@@ -105,6 +104,21 @@ export class ContextBuilder {
 				);
 				if (knowledgeFileContent.trim()) {
 					sections.push(truncateToTokenBudget(knowledgeFileContent, 1000));
+				}
+			} catch {
+				// File not found or unreadable — skip
+			}
+		}
+
+		// Common knowledge shared by all pets
+		if (this.deps.commonKnowledgeFilePath) {
+			try {
+				const commonContent = await readFile(
+					this.deps.commonKnowledgeFilePath,
+					"utf8",
+				);
+				if (commonContent.trim()) {
+					sections.push(truncateToTokenBudget(commonContent, 400));
 				}
 			} catch {
 				// File not found or unreadable — skip

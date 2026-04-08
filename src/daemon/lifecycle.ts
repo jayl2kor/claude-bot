@@ -18,13 +18,13 @@ import {
 } from "../cron/jobs.js";
 import type { KnowledgeFeedDeps } from "../cron/jobs.js";
 import { CronService } from "../cron/service.js";
+import { PeerEvaluator } from "../evaluation/evaluator.js";
+import { EvaluationPublisher } from "../evaluation/publisher.js";
+import { EvaluationStore } from "../evaluation/store.js";
+import { createExecutor } from "../executor/factory.js";
 import { DelegationBuilder } from "../expertise/defer.js";
 import { ExpertiseDocLoader } from "../expertise/loader.js";
 import { KnowledgeSeeder } from "../expertise/seeder.js";
-import { createExecutor } from "../executor/factory.js";
-import { EvaluationPublisher } from "../evaluation/publisher.js";
-import { EvaluationStore } from "../evaluation/store.js";
-import { PeerEvaluator } from "../evaluation/evaluator.js";
 import { GitReviewer } from "../git/reviewer.js";
 import { GitWatcher } from "../git/watcher.js";
 import { GrowthCollector } from "../growth/collector.js";
@@ -159,6 +159,13 @@ export async function runDaemon(
 		const knowledgeFilePath = configDir
 			? resolve(configDir, "knowledge.md")
 			: undefined;
+		const root = process.env.CLAUDE_PET_ROOT ?? process.cwd();
+		const commonKnowledgeFilePath = resolve(
+			root,
+			"config",
+			"common",
+			"knowledge.md",
+		);
 
 		const contextBuilder = new ContextBuilder({
 			persona: personaManager,
@@ -168,21 +175,25 @@ export async function runDaemon(
 			reflections,
 			statusReader,
 			knowledgeFilePath,
+			commonKnowledgeFilePath,
 			expertiseDocLoader,
 			delegationBuilder,
 		});
 
 		// 5. Initialize session manager
 		const executor = createExecutor(config.daemon.backend);
-		const sessionManager = new SessionManager({
-			maxConcurrentSessions: config.daemon.maxConcurrentSessions,
-			sessionTimeoutMs: config.daemon.sessionTimeoutMs,
-			model: config.daemon.model,
-			maxTurns: config.daemon.maxTurns,
-			skipPermissions: config.daemon.skipPermissions,
-			storeDir: resolve(DATA_DIR, "sessions"),
-			workspacePath: config.daemon.workspacePath,
-		}, executor);
+		const sessionManager = new SessionManager(
+			{
+				maxConcurrentSessions: config.daemon.maxConcurrentSessions,
+				sessionTimeoutMs: config.daemon.sessionTimeoutMs,
+				model: config.daemon.model,
+				maxTurns: config.daemon.maxTurns,
+				skipPermissions: config.daemon.skipPermissions,
+				storeDir: resolve(DATA_DIR, "sessions"),
+				workspacePath: config.daemon.workspacePath,
+			},
+			executor,
+		);
 
 		// 5b. Initialize status writer (optional)
 		const statusWriter = sharedStatusDir
@@ -280,9 +291,7 @@ export async function runDaemon(
 		const smartModelSelection = smsConfig.enabled
 			? {
 					enabled: true as const,
-					statsTracker: new ModelStatsTracker(
-						resolve(DATA_DIR, "model-stats"),
-					),
+					statsTracker: new ModelStatsTracker(resolve(DATA_DIR, "model-stats")),
 					defaultModel: smsConfig.defaultModel,
 				}
 			: undefined;
@@ -337,16 +346,19 @@ export async function runDaemon(
 		// 10. Initialize collaboration (optional)
 		const collabConfig = config.daemon.collaboration;
 		const collaboration = collabConfig.enabled
-			? new CollaborationManager({
-					petId: config.persona.name,
-					role: collabConfig.role,
-					sharedDir: resolve(
-						collabConfig.sharedDir ??
-							resolve(DATA_DIR, "..", "shared", "tasks"),
-					),
-					skipPermissions: config.daemon.skipPermissions,
-					model: config.daemon.model,
-				}, executor)
+			? new CollaborationManager(
+					{
+						petId: config.persona.name,
+						role: collabConfig.role,
+						sharedDir: resolve(
+							collabConfig.sharedDir ??
+								resolve(DATA_DIR, "..", "shared", "tasks"),
+						),
+						skipPermissions: config.daemon.skipPermissions,
+						model: config.daemon.model,
+					},
+					executor,
+				)
 			: undefined;
 
 		// 11. Initialize evaluation (optional)
@@ -355,7 +367,8 @@ export async function runDaemon(
 		let peerEvaluator: PeerEvaluator | undefined;
 		if (evalConfig.enabled) {
 			const evalSharedDir = resolve(
-				evalConfig.sharedDir ?? resolve(DATA_DIR, "..", "shared", "evaluations"),
+				evalConfig.sharedDir ??
+					resolve(DATA_DIR, "..", "shared", "evaluations"),
 			);
 			const evalStore = new EvaluationStore(evalSharedDir);
 			evaluationPublisher = new EvaluationPublisher(
@@ -381,7 +394,9 @@ export async function runDaemon(
 				const userId = parts[0];
 				const channelId = parts[1];
 				if (!userId || !channelId) {
-					logger.warn("EvaluationPublisher: skipped — malformed sessionKey", { sessionKey });
+					logger.warn("EvaluationPublisher: skipped — malformed sessionKey", {
+						sessionKey,
+					});
 					return;
 				}
 				void publisher.maybePublish(sessionKey, userId, channelId, history);
@@ -460,7 +475,6 @@ export async function runDaemon(
 					"GitWatcher: reviewChannelId is empty — reviews will not be delivered. Set daemon.gitWatcher.reviewChannelId in your config.",
 				);
 			}
-
 
 			const gitWatcher = new GitWatcher(
 				config.daemon.workspacePath,
