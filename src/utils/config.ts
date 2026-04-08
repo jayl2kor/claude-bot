@@ -45,6 +45,12 @@ const CollaborationConfigSchema = z.object({
 	sharedDir: z.string().optional(),
 });
 
+const AttachmentConfigSchema = z.object({
+	maxFileSizeMb: z.number().default(10),
+	maxTotalSizeMb: z.number().default(25),
+	retentionDays: z.number().default(7),
+});
+
 const DaemonConfigSchema = z.object({
 	maxConcurrentSessions: z.number().default(10),
 	sessionTimeoutMs: z.number().default(30 * 60 * 1000),
@@ -57,6 +63,7 @@ const DaemonConfigSchema = z.object({
 	git: GitConfigSchema.default({}),
 	collaboration: CollaborationConfigSchema.default({}),
 	smartModelSelection: SmartModelSelectionSchema.default({}),
+	attachments: AttachmentConfigSchema.default({}),
 });
 
 export const AppConfigSchema = z.object({

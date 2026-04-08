@@ -7,6 +7,7 @@
  * - proactive-message: Send a greeting or check-in (optional)
  */
 
+import { cleanOldUploads } from "../attachments/cleanup.js";
 import type { CollaborationManager } from "../collaboration/manager.js";
 import { spawnClaude } from "../executor/spawner.js";
 import { analyzeActivity } from "../memory/activity-analyzer.js";
@@ -31,6 +32,10 @@ export type CronJobDeps = {
 	history: ChatHistoryManager;
 	collaboration?: CollaborationManager;
 	plugins: ChannelPlugin[];
+	/** Upload directory for attachment cleanup. */
+	uploadDir?: string;
+	/** Attachment retention in days (default: 7). */
+	attachmentRetentionDays?: number;
 };
 
 const SIX_HOURS = 6 * 60 * 60 * 1000;
@@ -75,6 +80,20 @@ export function createBuiltinJobs(deps: CronJobDeps): CronJob[] {
 			runOnStart: false,
 			handler: () => runHistoryPrune(deps),
 		},
+		...(deps.uploadDir
+			? [
+					{
+						id: "upload-cleanup",
+						intervalMs: TWENTY_FOUR_HOURS,
+						runOnStart: true,
+						handler: (() => {
+							const dir = deps.uploadDir as string;
+							const days = deps.attachmentRetentionDays ?? 7;
+							return () => runUploadCleanup(dir, days);
+						})(),
+					},
+				]
+			: []),
 		...(deps.collaboration
 			? [
 					{
@@ -324,5 +343,18 @@ async function runHistoryPrune(deps: CronJobDeps): Promise<void> {
 			pruned: totalPruned,
 			channels: channels.length,
 		});
+	}
+}
+
+/**
+ * Upload cleanup — remove old date-based upload directories.
+ */
+async function runUploadCleanup(
+	uploadDir: string,
+	retentionDays: number,
+): Promise<void> {
+	const removed = await cleanOldUploads(uploadDir, retentionDays);
+	if (removed > 0) {
+		logger.info("Upload cleanup completed", { removed, retentionDays });
 	}
 }

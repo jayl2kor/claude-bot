@@ -145,14 +145,30 @@ export async function runDaemon(
 			: undefined;
 
 		// 6. Initialize channel plugins
+		const attachmentConfig = config.daemon.attachments;
+		const uploadDir = resolve(DATA_DIR, "uploads");
 		const plugins: ChannelPlugin[] = [];
 
 		if (config.channels.discord) {
-			plugins.push(createDiscordPlugin(config.channels.discord));
+			plugins.push(
+				createDiscordPlugin({
+					...config.channels.discord,
+					uploadDir,
+					maxFileSizeMb: attachmentConfig.maxFileSizeMb,
+					maxTotalSizeMb: attachmentConfig.maxTotalSizeMb,
+				}),
+			);
 		}
 
 		if (config.channels.telegram) {
-			plugins.push(createTelegramPlugin(config.channels.telegram));
+			plugins.push(
+				createTelegramPlugin({
+					...config.channels.telegram,
+					uploadDir,
+					maxFileSizeMb: attachmentConfig.maxFileSizeMb,
+					maxTotalSizeMb: attachmentConfig.maxTotalSizeMb,
+				}),
+			);
 		}
 
 		// Fallback to CLI mode if no external channels configured
@@ -232,6 +248,8 @@ export async function runDaemon(
 			history,
 			collaboration,
 			plugins,
+			uploadDir,
+			attachmentRetentionDays: attachmentConfig.retentionDays,
 		})) {
 			cronService.add(job);
 		}
