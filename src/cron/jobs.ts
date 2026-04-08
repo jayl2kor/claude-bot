@@ -338,3 +338,63 @@ async function runHistoryPrune(deps: CronJobDeps): Promise<void> {
 		});
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Git watcher cron job
+// ---------------------------------------------------------------------------
+
+export type GitWatcherJobDeps = {
+	readonly watcher: import("../git/watcher.js").GitWatcher;
+	readonly reviewer: import("../git/reviewer.js").GitReviewer;
+	readonly plugins: ChannelPlugin[];
+	readonly reviewChannelId: string;
+	readonly pollIntervalMs: number;
+};
+
+export function createGitWatcherJob(deps: GitWatcherJobDeps): CronJob | null {
+	if (!deps.watcher.isActive) return null;
+
+	return {
+		id: "git-watcher",
+		intervalMs: deps.pollIntervalMs,
+		runOnStart: false,
+		handler: () => runGitWatcher(deps),
+	};
+}
+
+async function runGitWatcher(deps: GitWatcherJobDeps): Promise<void> {
+	const { watcher, reviewer, plugins } = deps;
+
+	if (!watcher.isActive || plugins.length === 0) return;
+
+	const plugin = plugins[0];
+	const state = watcher.getState();
+
+	for (const branch of Object.keys(state.lastCheckedSha)) {
+		if (watcher.isRateLimited()) {
+			logger.debug("Git watcher rate limited, skipping", { branch });
+			break;
+		}
+
+		try {
+			const commits = await watcher.poll(branch);
+
+			for (const commit of commits) {
+				if (watcher.isRateLimited()) break;
+
+				const diff = await watcher.getDiff(commit.sha);
+				const message = await reviewer.review(commit, diff);
+				await reviewer.sendReview(plugin, deps.reviewChannelId, message);
+
+				watcher.recordReview();
+			}
+		} catch (err) {
+			logger.error("Git watcher poll failed", {
+				branch,
+				error: String(err),
+			});
+		}
+	}
+
+	await watcher.persistState();
+}

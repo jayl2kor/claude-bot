@@ -72,6 +72,29 @@ vi.mock("../cron/jobs.js", () => ({
 	createBuiltinJobs: vi.fn(() => []),
 }));
 
+vi.mock("../knowledge-feed/feed-store.js", () => ({
+	FeedStore: vi.fn().mockImplementation(() => ({})),
+}));
+
+vi.mock("../knowledge-feed/publisher.js", () => ({
+	FeedPublisher: vi.fn().mockImplementation(() => ({
+		publish: vi.fn(async () => null),
+	})),
+}));
+
+vi.mock("../knowledge-feed/subscriber.js", () => ({
+	FeedSubscriber: vi.fn().mockImplementation(() => ({
+		poll: vi.fn(async () => ({ imported: 0, skipped: 0 })),
+	})),
+}));
+
+vi.mock("../model/stats.js", () => ({
+	ModelStatsTracker: vi.fn().mockImplementation(() => ({
+		record: vi.fn(async () => {}),
+		getStats: vi.fn(async () => ({})),
+	})),
+}));
+
 vi.mock("../cron/service.js", () => ({
 	CronService: vi.fn().mockImplementation(() => ({
 		add: vi.fn(),
@@ -185,10 +208,10 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 			claudeModel: "sonnet",
 			maxTurns: 10,
 			skipPermissions: false,
-			collaboration: {
-				enabled: false,
-				role: "general",
-			},
+			git: { enabled: false, autoSync: false },
+			collaboration: { enabled: false, role: "general" },
+			smartModelSelection: { enabled: false, defaultModel: "sonnet" },
+			knowledgeFeed: { enabled: false, pollIntervalMs: 30_000, ttlMs: 604_800_000, confidenceMultiplier: 0.7 },
 			study: {
 				enabled: false,
 				maxDailySessions: 5,
