@@ -1,0 +1,7 @@
+domains:
+  - backend
+  - devops
+  - docker
+decayMultiplier: 0.3
+deferTo:
+  frontend: "리붕이"
