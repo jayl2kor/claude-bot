@@ -91,6 +91,7 @@ function makeDeps(overrides: Partial<MessageRouterDeps> = {}): MessageRouterDeps
 		} as unknown as MessageRouterDeps["activityTracker"],
 		history: {
 			append: vi.fn().mockResolvedValue(undefined),
+			getRecent: vi.fn().mockResolvedValue([]),
 		} as unknown as MessageRouterDeps["history"],
 		integrator: {
 			integrate: vi.fn().mockResolvedValue(undefined),
