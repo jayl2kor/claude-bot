@@ -12,6 +12,7 @@ import type { CollaborationManager } from "../collaboration/manager.js";
 import { propagateKnowledge } from "../collaboration/knowledge-propagation.js";
 import type { PeerEvaluator } from "../evaluation/evaluator.js";
 import { spawnClaude } from "../executor/spawner.js";
+import type { ExpertiseConfig } from "../expertise/types.js";
 import { GrowthCollector } from "../growth/collector.js";
 import type { GrowthReporter } from "../growth/reporter.js";
 import type { FeedStore } from "../knowledge-feed/feed-store.js";
@@ -56,6 +57,7 @@ export type CronJobDeps = {
 	plugins: ChannelPlugin[];
 	/** Peer pets' knowledge stores for cross-pet knowledge propagation (Issue #6). */
 	peerKnowledge?: PeerKnowledge[];
+	expertiseConfig?: ExpertiseConfig;
 };
 
 const ONE_HOUR = 60 * 60 * 1000;
