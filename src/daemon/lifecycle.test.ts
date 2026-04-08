@@ -286,11 +286,12 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 			maxTurns: 10,
 			skipPermissions: false,
 			git: { enabled: false, autoSync: false },
-			gitWatcher: { enabled: false, branches: ["main"], pollIntervalMs: 60_000, maxReviewsPerHour: 5, ignoreAuthors: [], reviewChannelId: "", maxDiffChars: 4000 },
+			gitWatcher: { enabled: false, branches: ["main"], pollIntervalMs: 60000, maxReviewsPerHour: 5, ignoreAuthors: [], reviewChannelId: "", maxDiffChars: 4000 },
 			collaboration: { enabled: false, role: "general" },
 			growthReport: { enabled: false, intervalMs: 604_800_000, language: "ko" },
 			smartModelSelection: { enabled: false, defaultModel: "sonnet" },
 			attachments: { maxFileSizeMb: 10, maxTotalSizeMb: 25, retentionDays: 7 },
+			growthReport: { enabled: false, intervalMs: 604_800_000, language: "ko" },
 			knowledgeFeed: { enabled: false, pollIntervalMs: 30_000, ttlMs: 604_800_000, confidenceMultiplier: 0.7 },
 			study: {
 				enabled: false,

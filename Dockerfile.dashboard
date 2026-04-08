@@ -1,0 +1,19 @@
+FROM node:24-bookworm AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --ignore-scripts
+COPY tsconfig.json ./
+COPY src/dashboard/ src/dashboard/
+COPY src/memory/ src/memory/
+COPY src/status/ src/status/
+COPY src/utils/ src/utils/
+RUN npx tsc --outDir dist
+
+FROM node:24-bookworm-slim
+WORKDIR /app
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json ./
+COPY dashboard/ ./dashboard/
+EXPOSE 3000
+CMD ["node", "dist/dashboard/main.js"]

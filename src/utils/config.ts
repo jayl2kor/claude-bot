@@ -38,6 +38,16 @@ const GitConfigSchema = z.object({
 const GrowthReportConfigSchema = z.object({
 	enabled: z.boolean().default(false),
 	intervalMs: z.number().default(7 * 24 * 60 * 60 * 1000), // weekly
+
+const AttachmentConfigSchema = z.object({
+	maxFileSizeMb: z.number().default(10),
+	maxTotalSizeMb: z.number().default(25),
+	retentionDays: z.number().default(7),
+});
+
+const GrowthReportConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	intervalMs: z.number().default(7 * 24 * 60 * 60 * 1000),
 	channelId: z.string().optional(),
 	language: z.string().default("ko"),
 });
@@ -61,12 +71,6 @@ const CollaborationConfigSchema = z.object({
 	enabled: z.boolean().default(false),
 	role: z.string().default("general"),
 	sharedDir: z.string().optional(),
-});
-
-const AttachmentConfigSchema = z.object({
-	maxFileSizeMb: z.number().default(10),
-	maxTotalSizeMb: z.number().default(25),
-	retentionDays: z.number().default(7),
 });
 
 const StudyConfigSchema = z.object({

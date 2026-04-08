@@ -11,6 +11,7 @@
 import { cleanOldUploads } from "../attachments/cleanup.js";
 import type { CollaborationManager } from "../collaboration/manager.js";
 import { propagateKnowledge } from "../collaboration/knowledge-propagation.js";
+import type { ExpertiseConfig } from "../expertise/types.js";
 import type { PeerEvaluator } from "../evaluation/evaluator.js";
 import { spawnClaude } from "../executor/spawner.js";
 import type { ExpertiseConfig } from "../expertise/types.js";
@@ -56,6 +57,8 @@ export type CronJobDeps = {
 	knowledgeFeed?: KnowledgeFeedDeps;
 	evaluator?: PeerEvaluator;
 	plugins: ChannelPlugin[];
+	/** Peer pets' knowledge stores for cross-pet knowledge propagation (Issue #6). */
+	peerKnowledge?: PeerKnowledge[];
 	/** Upload directory for attachment cleanup. */
 	uploadDir?: string;
 	/** Attachment retention in days (default: 7). */
@@ -417,19 +420,6 @@ async function runHistoryPrune(deps: CronJobDeps): Promise<void> {
 }
 
 /**
- * Upload cleanup — remove old date-based upload directories.
- */
-async function runUploadCleanup(
-	uploadDir: string,
-	retentionDays: number,
-): Promise<void> {
-	const removed = await cleanOldUploads(uploadDir, retentionDays);
-	if (removed > 0) {
-		logger.info("Upload cleanup completed", { removed, retentionDays });
-	}
-}
-
-/**
  * Memory decay — apply Ebbinghaus forgetting curve to all knowledge entries
  * and archive entries that have decayed below the archive threshold.
  *
@@ -488,8 +478,17 @@ async function runKnowledgePropagation(deps: CronJobDeps): Promise<void> {
 			totalPropagated,
 			peers: deps.peerKnowledge.length,
 		});
+
+ * Upload cleanup — remove old date-based upload directories.
+ */
+async function runUploadCleanup(
+	uploadDir: string,
+	retentionDays: number,
+): Promise<void> {
+	const removed = await cleanOldUploads(uploadDir, retentionDays);
+	if (removed > 0) {
+		logger.info("Upload cleanup completed", { removed, retentionDays });
 	}
-}	}
 }
 
 /**

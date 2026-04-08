@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Pet Dashboard</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Claude Pet Dashboard</h1>
+    <span id="connection-status" class="status-dot offline" title="Disconnected"></span>
+  </header>
+
+  <main>
+    <section id="pet-grid" class="pet-grid">
+      <p class="placeholder">Loading pets...</p>
+    </section>
+
+    <section id="detail-panel" class="detail-panel hidden">
+      <div class="detail-header">
+        <h2 id="detail-name"></h2>
+        <span id="detail-status" class="status-dot"></span>
+        <button id="close-detail" class="close-btn" aria-label="Close">&times;</button>
+      </div>
+
+      <nav class="tabs">
+        <button class="tab active" data-tab="overview">Overview</button>
+        <button class="tab" data-tab="knowledge">Knowledge</button>
+        <button class="tab" data-tab="activity">Activity</button>
+        <button class="tab" data-tab="reflections">Reflections</button>
+        <button class="tab" data-tab="persona">Persona</button>
+      </nav>
+
+      <div id="tab-overview" class="tab-content active">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value" id="stat-knowledge">-</div>
+            <div class="stat-label">Knowledge</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="stat-relationships">-</div>
+            <div class="stat-label">Relationships</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="stat-reflections">-</div>
+            <div class="stat-label">Reflections</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="stat-sessions">-</div>
+            <div class="stat-label">Activity Points</div>
+          </div>
+        </div>
+        <div class="chart-container">
+          <h3>Growth Timeline</h3>
+          <canvas id="growth-chart"></canvas>
+        </div>
+        <div id="latest-insight" class="insight-card hidden">
+          <h3>Latest Insight</h3>
+          <p id="insight-text"></p>
+        </div>
+      </div>
+
+      <div id="tab-knowledge" class="tab-content">
+        <div class="search-bar">
+          <input type="text" id="knowledge-search" placeholder="Search knowledge..." />
+          <button id="knowledge-search-btn">Search</button>
+        </div>
+        <div id="knowledge-list" class="knowledge-list"></div>
+        <div class="pagination">
+          <button id="knowledge-prev" disabled>Prev</button>
+          <span id="knowledge-page-info">Page 1</span>
+          <button id="knowledge-next">Next</button>
+        </div>
+      </div>
+
+      <div id="tab-activity" class="tab-content">
+        <div class="chart-container">
+          <h3>Activity Heatmap (by Hour)</h3>
+          <canvas id="activity-chart"></canvas>
+        </div>
+      </div>
+
+      <div id="tab-reflections" class="tab-content">
+        <div id="reflections-list" class="reflections-list"></div>
+      </div>
+
+      <div id="tab-persona" class="tab-content">
+        <div id="persona-info" class="persona-info"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
