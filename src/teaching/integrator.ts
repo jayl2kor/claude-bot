@@ -9,6 +9,7 @@
 
 import { randomUUID } from "node:crypto";
 import { spawnClaude } from "../executor/spawner.js";
+import type { FeedPublisher } from "../knowledge-feed/publisher.js";
 import type { KnowledgeManager } from "../memory/knowledge.js";
 import type { Reflection } from "../memory/reflection.js";
 import type { ReflectionManager } from "../memory/reflection.js";
@@ -30,8 +31,13 @@ export class SessionIntegrator {
 		knowledge: KnowledgeManager,
 		private readonly reflections: ReflectionManager,
 		private readonly relationships: RelationshipManager,
+		feedPublisher?: FeedPublisher,
 	) {
-		this.extractor = new KnowledgeExtractor(knowledge, relationships);
+		this.extractor = new KnowledgeExtractor(
+			knowledge,
+			relationships,
+			feedPublisher,
+		);
 	}
 
 	/**

@@ -35,14 +35,39 @@ const GitConfigSchema = z.object({
 	autoSync: z.boolean().default(false),
 });
 
+const GrowthReportConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	intervalMs: z.number().default(7 * 24 * 60 * 60 * 1000), // weekly
+	channelId: z.string().optional(),
+	language: z.string().default("ko"),
+});
+
 const SmartModelSelectionSchema = z.object({
 	enabled: z.boolean().default(false),
 	defaultModel: z.enum(["haiku", "sonnet", "opus"]).default("sonnet"),
 });
 
+const GitWatcherConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	branches: z.array(z.string()).default(["main"]),
+	pollIntervalMs: z.number().default(60_000),
+	maxReviewsPerHour: z.number().default(5),
+	ignoreAuthors: z.array(z.string()).default([]),
+	reviewChannelId: z.string().default(""),
+	maxDiffChars: z.number().default(4000),
+});
+
 const CollaborationConfigSchema = z.object({
 	enabled: z.boolean().default(false),
 	role: z.string().default("general"),
+	sharedDir: z.string().optional(),
+});
+
+const KnowledgeFeedConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	pollIntervalMs: z.number().default(30_000),
+	ttlMs: z.number().default(7 * 24 * 60 * 60 * 1000),
+	confidenceMultiplier: z.number().min(0).max(1).default(0.7),
 	sharedDir: z.string().optional(),
 });
 
@@ -63,8 +88,11 @@ const DaemonConfigSchema = z.object({
 	workspacePath: z.string().optional(),
 	sharedStatusDir: z.string().optional(),
 	git: GitConfigSchema.default({}),
+	gitWatcher: GitWatcherConfigSchema.default({}),
 	collaboration: CollaborationConfigSchema.default({}),
+	growthReport: GrowthReportConfigSchema.default({}),
 	smartModelSelection: SmartModelSelectionSchema.default({}),
+	knowledgeFeed: KnowledgeFeedConfigSchema.default({}),
 	evaluation: EvaluationConfigSchema.default({}),
 });
 
@@ -77,6 +105,8 @@ export const AppConfigSchema = z.object({
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
 export type PersonaConfig = z.infer<typeof PersonaConfigSchema>;
+export type GrowthReportConfig = z.infer<typeof GrowthReportConfigSchema>;
+export type GitWatcherConfig = z.infer<typeof GitWatcherConfigSchema>;
 
 /**
  * Load .env file into process.env, then load YAML config with env substitution.

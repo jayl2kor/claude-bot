@@ -70,7 +70,7 @@ export class FileMemoryStore<S extends z.ZodTypeAny> {
 			const files = await readdir(this.baseDir);
 			return files
 				.filter((f) => f.endsWith(".json"))
-				.map((f) => f.replace(".json", ""));
+				.map((f) => f.slice(0, -5));
 		} catch (err) {
 			if (isENOENT(err)) return [];
 			throw err;

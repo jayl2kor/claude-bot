@@ -70,6 +70,24 @@ vi.mock("../context/builder.js", () => ({
 
 vi.mock("../cron/jobs.js", () => ({
 	createBuiltinJobs: vi.fn(() => []),
+	createGrowthReportJob: vi.fn(() => null),
+	createGitWatcherJob: vi.fn(() => null),
+}));
+
+vi.mock("../knowledge-feed/feed-store.js", () => ({
+	FeedStore: vi.fn().mockImplementation(() => ({})),
+}));
+
+vi.mock("../knowledge-feed/publisher.js", () => ({
+	FeedPublisher: vi.fn().mockImplementation(() => ({
+		publish: vi.fn(async () => null),
+	})),
+}));
+
+vi.mock("../knowledge-feed/subscriber.js", () => ({
+	FeedSubscriber: vi.fn().mockImplementation(() => ({
+		poll: vi.fn(async () => ({ imported: 0, skipped: 0 })),
+	})),
 }));
 
 vi.mock("../cron/service.js", () => ({
@@ -154,6 +172,53 @@ vi.mock("../evaluation/evaluator.js", () => ({
 	})),
 }));
 
+vi.mock("../git/watcher.js", () => ({
+	GitWatcher: vi.fn().mockImplementation(() => ({
+		init: vi.fn(async () => {}),
+		isActive: false,
+		getState: vi.fn(() => ({ lastCheckedSha: {} })),
+		poll: vi.fn(async () => []),
+		getDiff: vi.fn(async () => ""),
+		isRateLimited: vi.fn(() => false),
+		recordReview: vi.fn(),
+		persistState: vi.fn(async () => {}),
+	})),
+}));
+
+vi.mock("../git/reviewer.js", () => ({
+	GitReviewer: vi.fn().mockImplementation(() => ({
+		review: vi.fn(async () => ""),
+		sendReview: vi.fn(async () => {}),
+	})),
+}));
+
+vi.mock("../growth/collector.js", () => ({
+	GrowthCollector: vi.fn().mockImplementation(() => ({
+		collect: vi.fn(async () => ({})),
+	})),
+}));
+
+vi.mock("../growth/history-store.js", () => ({
+	FileReportHistoryStore: vi.fn().mockImplementation(() => ({})),
+}));
+
+vi.mock("../growth/reporter.js", () => ({
+	GrowthReporter: vi.fn().mockImplementation(() => ({
+		generateReport: vi.fn(async () => ({})),
+		getLatestHistory: vi.fn(async () => null),
+		saveHistory: vi.fn(async () => {}),
+		sendToChannel: vi.fn(async () => {}),
+	})),
+}));
+
+vi.mock("../model/stats.js", () => ({
+	ModelStatsTracker: vi.fn().mockImplementation(() => ({
+		getSessionModel: vi.fn(() => undefined),
+		setSessionModel: vi.fn(),
+		record: vi.fn(async () => {}),
+	})),
+}));
+
 vi.mock("../utils/sleep.js", () => ({
 	sleep: vi.fn(async () => {}),
 }));
@@ -205,6 +270,9 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 			collaboration: { enabled: false, role: "general" },
 			smartModelSelection: { enabled: false, defaultModel: "sonnet" },
 			evaluation: { enabled: false, probability: 0.3, maxPendingCount: 5 },
+			growthReport: { enabled: false, intervalMs: 604800000, language: "ko" },
+			gitWatcher: { enabled: false, branches: ["main"], pollIntervalMs: 60000, maxReviewsPerHour: 5, ignoreAuthors: [], reviewChannelId: "", maxDiffChars: 4000 },
+			knowledgeFeed: { enabled: false, pollIntervalMs: 30000, ttlMs: 604800000, confidenceMultiplier: 0.7 },
 		},
 		expertise: {
 			domains: [],
