@@ -35,6 +35,10 @@ const GitConfigSchema = z.object({
 	autoSync: z.boolean().default(false),
 });
 
+const GrowthReportConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	intervalMs: z.number().default(7 * 24 * 60 * 60 * 1000), // weekly
+
 const AttachmentConfigSchema = z.object({
 	maxFileSizeMb: z.number().default(10),
 	maxTotalSizeMb: z.number().default(25),
