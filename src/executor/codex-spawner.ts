@@ -6,12 +6,17 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { logger } from "../utils/logger.js";
+import {
+	extractCodexActivities,
+	extractCodexErrorMessage,
+	extractCodexText,
+	parseCodexLine,
+} from "./codex-parser.js";
 import type {
 	ExecutorHandle,
 	ExecutorResult,
 	ExecutorSpawnOptions,
 } from "./interface.js";
-import { extractCodexActivities, extractCodexErrorMessage, extractCodexText, parseCodexLine } from "./codex-parser.js";
 import type { SessionActivity, SessionDoneStatus } from "./types.js";
 
 const MAX_ACTIVITIES = 10;
@@ -24,10 +29,15 @@ export function createCodexExecutor(opts: CodexSpawnOptions): ExecutorHandle {
 	logger.debug("Spawning codex", { args: args.join(" ") });
 
 	const child: ChildProcess = spawn("codex", args, {
-		cwd: opts.cwd,
-		stdio: ["ignore", "pipe", "pipe"],
+		cwd: opts.cwd ?? "/workspace",
+		stdio: ["pipe", "pipe", "pipe"],
 		env: { ...process.env },
 	});
+
+	// Close stdin immediately so codex doesn't wait for additional input
+	if (child.stdin) {
+		child.stdin.end();
+	}
 
 	const activities: SessionActivity[] = [];
 	let currentActivity: SessionActivity | null = null;
@@ -56,9 +66,8 @@ export function createCodexExecutor(opts: CodexSpawnOptions): ExecutorHandle {
 			if (!event) return;
 
 			if (event.type === "thread.started") {
-				resolvedSessionId = typeof event.thread_id === "string"
-					? event.thread_id
-					: undefined;
+				resolvedSessionId =
+					typeof event.thread_id === "string" ? event.thread_id : undefined;
 			}
 
 			for (const activity of extractCodexActivities(event)) {
@@ -71,9 +80,7 @@ export function createCodexExecutor(opts: CodexSpawnOptions): ExecutorHandle {
 
 			const text = extractCodexText(event);
 			if (text) {
-				aggregatedText = aggregatedText
-					? `${aggregatedText}\n${text}`
-					: text;
+				aggregatedText = aggregatedText ? `${aggregatedText}\n${text}` : text;
 				for (const cb of textCallbacks) cb(text);
 			}
 
@@ -163,9 +170,9 @@ export function createCodexExecutor(opts: CodexSpawnOptions): ExecutorHandle {
 
 export function buildCodexArgs(opts: CodexSpawnOptions): string[] {
 	const composedPrompt = opts.systemPrompt
-		// `codex exec` currently has no dedicated system-prompt flag.
-		// Keep a strict section boundary so instruction precedence is explicit.
-		? [
+		? // `codex exec` currently has no dedicated system-prompt flag.
+			// Keep a strict section boundary so instruction precedence is explicit.
+			[
 				"<system_instructions>",
 				opts.systemPrompt,
 				"</system_instructions>",
@@ -180,7 +187,10 @@ export function buildCodexArgs(opts: CodexSpawnOptions): string[] {
 
 	const args = ["exec", composedPrompt, "--json"];
 
-	if (opts.model) {
+	// Only pass model if it's a Codex-compatible model name.
+	// Claude model names (sonnet, haiku, opus) are not valid for Codex.
+	const claudeModels = ["sonnet", "haiku", "opus"];
+	if (opts.model && !claudeModels.includes(opts.model)) {
 		args.push("-m", opts.model);
 	}
 
