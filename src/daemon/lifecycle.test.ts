@@ -9,10 +9,10 @@
  * All heavy dependencies are mocked to keep tests unit-level.
  */
 
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
+import { mkdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -58,6 +58,7 @@ vi.mock("../channel/telegram/plugin.js", () => ({
 vi.mock("../channel/router.js", () => ({
 	MessageRouter: vi.fn().mockImplementation(() => ({
 		start: vi.fn(),
+		startCommands: vi.fn(async () => {}),
 	})),
 }));
 
@@ -118,6 +119,24 @@ vi.mock("../teaching/integrator.js", () => ({
 	})),
 }));
 
+vi.mock("../expertise/loader.js", () => ({
+	ExpertiseDocLoader: vi.fn().mockImplementation(() => ({
+		toPromptSection: vi.fn(async () => null),
+	})),
+}));
+
+vi.mock("../expertise/seeder.js", () => ({
+	KnowledgeSeeder: vi.fn().mockImplementation(() => ({
+		seed: vi.fn(async () => 0),
+	})),
+}));
+
+vi.mock("../expertise/defer.js", () => ({
+	DelegationBuilder: vi.fn().mockImplementation(() => ({
+		toPromptSection: vi.fn(async () => null),
+	})),
+}));
+
 vi.mock("../utils/sleep.js", () => ({
 	sleep: vi.fn(async () => {}),
 }));
@@ -141,8 +160,8 @@ vi.mock("./pointer.js", () => ({
 // Import after mocks
 // ---------------------------------------------------------------------------
 
-import { runDaemon } from "./lifecycle.js";
 import type { AppConfig } from "../utils/config.js";
+import { runDaemon } from "./lifecycle.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -164,6 +183,15 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 			pointerRefreshMs: 300_000,
 			claudeModel: "sonnet",
 			maxTurns: 10,
+			skipPermissions: false,
+			git: { enabled: false, autoSync: false },
+			collaboration: { enabled: false, role: "general" },
+			smartModelSelection: { enabled: false, defaultModel: "sonnet" },
+		},
+		expertise: {
+			domains: [],
+			decayMultiplier: 0.3,
+			deferTo: {},
 		},
 		...overrides,
 	};
@@ -203,7 +231,9 @@ describe("runDaemon — CLI fallback", () => {
 
 describe("runDaemon — Discord channel", () => {
 	it("initializes discord plugin when discord config present", async () => {
-		const { createDiscordPlugin } = await import("../channel/discord/plugin.js");
+		const { createDiscordPlugin } = await import(
+			"../channel/discord/plugin.js"
+		);
 		const { createCliPlugin } = await import("../channel/cli/plugin.js");
 		vi.mocked(createDiscordPlugin).mockClear();
 		vi.mocked(createCliPlugin).mockClear();
@@ -226,7 +256,9 @@ describe("runDaemon — Discord channel", () => {
 
 describe("runDaemon — Telegram channel", () => {
 	it("initializes telegram plugin when telegram config present", async () => {
-		const { createTelegramPlugin } = await import("../channel/telegram/plugin.js");
+		const { createTelegramPlugin } = await import(
+			"../channel/telegram/plugin.js"
+		);
 		const { createCliPlugin } = await import("../channel/cli/plugin.js");
 		vi.mocked(createTelegramPlugin).mockClear();
 		vi.mocked(createCliPlugin).mockClear();
@@ -252,9 +284,7 @@ describe("runDaemon — crash recovery pointer", () => {
 		const { PointerManager } = await import("./pointer.js");
 
 		const existingPointer = {
-			activeSessions: [
-				{ sessionKey: "u1:c1", channelId: "c1", userId: "u1" },
-			],
+			activeSessions: [{ sessionKey: "u1:c1", channelId: "c1", userId: "u1" }],
 			startedAt: Date.now() - 5000,
 			pid: 99999,
 		};
@@ -352,7 +382,9 @@ describe("runDaemon — process lock", () => {
 
 		const config = makeConfig({ channels: {} });
 
-		await expect(runDaemon(config, signal, dataDir)).rejects.toThrow("write error");
+		await expect(runDaemon(config, signal, dataDir)).rejects.toThrow(
+			"write error",
+		);
 		expect(releaseMock).toHaveBeenCalledTimes(1);
 	});
 });
@@ -462,7 +494,9 @@ describe("runDaemon — shutdown sequence", () => {
 		abort();
 		await runPromise;
 
-		expect(order.indexOf("cron-stop")).toBeLessThan(order.indexOf("plugin-disconnect"));
+		expect(order.indexOf("cron-stop")).toBeLessThan(
+			order.indexOf("plugin-disconnect"),
+		);
 	});
 });
 

@@ -7,6 +7,8 @@
  */
 
 import { readFile } from "node:fs/promises";
+import type { DelegationBuilder } from "../expertise/defer.js";
+import type { ExpertiseDocLoader } from "../expertise/loader.js";
 import type { ChatHistoryManager } from "../memory/history.js";
 import type { KnowledgeManager } from "../memory/knowledge.js";
 import type { PersonaManager } from "../memory/persona.js";
@@ -24,6 +26,10 @@ export type ContextBuilderDeps = {
 	statusReader?: StatusReader;
 	/** Path to a knowledge.md file with static knowledge for this pet. */
 	knowledgeFilePath?: string;
+	/** Expertise domain knowledge docs loader. */
+	expertiseDocLoader?: ExpertiseDocLoader;
+	/** Delegation builder for cross-pet topic routing. */
+	delegationBuilder?: DelegationBuilder;
 };
 
 /** Rough token estimate: ~4 chars per token for English, ~2 for Korean. */
@@ -87,6 +93,8 @@ export class ContextBuilder {
 			reflectionSection,
 			historyResults,
 			statusSection,
+			expertiseDocsSection,
+			delegationSection,
 		] = await Promise.all([
 			this.deps.persona.toPromptSection(),
 			this.deps.relationships.toPromptSection(userId),
@@ -96,6 +104,8 @@ export class ContextBuilder {
 			this.deps.reflections.toPromptSection(3),
 			historyPromise,
 			this.deps.statusReader?.toPromptSection() ?? Promise.resolve(null),
+			this.deps.expertiseDocLoader?.toPromptSection() ?? Promise.resolve(null),
+			this.deps.delegationBuilder?.toPromptSection() ?? Promise.resolve(null),
 		]);
 
 		const sections: string[] = [];
@@ -114,6 +124,16 @@ export class ContextBuilder {
 			} catch {
 				// File not found or unreadable — skip
 			}
+		}
+
+		// Expertise domain knowledge docs (2500 token budget, managed by loader)
+		if (expertiseDocsSection) {
+			sections.push(expertiseDocsSection);
+		}
+
+		// Delegation awareness (400 token budget, managed by builder)
+		if (delegationSection) {
+			sections.push(delegationSection);
 		}
 
 		if (relSection) {

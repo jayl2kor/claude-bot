@@ -13,6 +13,9 @@ import { CollaborationManager } from "../collaboration/manager.js";
 import { ContextBuilder } from "../context/builder.js";
 import { createBuiltinJobs } from "../cron/jobs.js";
 import { CronService } from "../cron/service.js";
+import { DelegationBuilder } from "../expertise/defer.js";
+import { ExpertiseDocLoader } from "../expertise/loader.js";
+import { KnowledgeSeeder } from "../expertise/seeder.js";
 import { ActivityTracker } from "../memory/activity.js";
 import { ChatHistoryManager } from "../memory/history.js";
 import { KnowledgeManager } from "../memory/knowledge.js";
@@ -100,13 +103,37 @@ export async function runDaemon(
 			resolve(DATA_DIR, "memory", "history"),
 		);
 
-		// 4. Initialize context builder (statusReader added after session manager)
+		// 4. Initialize expertise system
+		const CONFIG_DIR = configDir ?? resolve("config");
+		const expertiseDocLoader = new ExpertiseDocLoader(
+			resolve(CONFIG_DIR, "expertise"),
+		);
+
+		// Run knowledge seeder at boot
+		const seeder = new KnowledgeSeeder(
+			resolve(CONFIG_DIR, "seed-knowledge"),
+			DATA_DIR,
+			knowledge,
+		);
+		const seededCount = await seeder.seed();
+		if (seededCount > 0) {
+			logger.info("Knowledge seeder imported entries", {
+				count: seededCount,
+			});
+		}
+
+		// 5. Initialize context builder
 		const sharedStatusDir = config.daemon.sharedStatusDir
 			? resolve(config.daemon.sharedStatusDir)
 			: undefined;
 		const statusReader = sharedStatusDir
 			? new StatusReader(sharedStatusDir, config.persona.name)
 			: undefined;
+
+		const delegationBuilder = new DelegationBuilder(
+			config.expertise.deferTo,
+			statusReader,
+		);
 
 		// Resolve knowledge.md path from config directory
 		const knowledgeFilePath = configDir
@@ -121,6 +148,8 @@ export async function runDaemon(
 			reflections,
 			statusReader,
 			knowledgeFilePath,
+			expertiseDocLoader,
+			delegationBuilder,
 		});
 
 		// 5. Initialize session manager
@@ -232,6 +261,7 @@ export async function runDaemon(
 			history,
 			collaboration,
 			plugins,
+			expertiseConfig: config.expertise,
 		})) {
 			cronService.add(job);
 		}

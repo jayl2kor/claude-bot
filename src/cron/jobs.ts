@@ -9,6 +9,7 @@
 
 import type { CollaborationManager } from "../collaboration/manager.js";
 import { spawnClaude } from "../executor/spawner.js";
+import type { ExpertiseConfig } from "../expertise/types.js";
 import { analyzeActivity } from "../memory/activity-analyzer.js";
 import type { ActivityTracker } from "../memory/activity.js";
 import type { ChatHistoryManager } from "../memory/history.js";
@@ -31,6 +32,7 @@ export type CronJobDeps = {
 	history: ChatHistoryManager;
 	collaboration?: CollaborationManager;
 	plugins: ChannelPlugin[];
+	expertiseConfig?: ExpertiseConfig;
 };
 
 const SIX_HOURS = 6 * 60 * 60 * 1000;
