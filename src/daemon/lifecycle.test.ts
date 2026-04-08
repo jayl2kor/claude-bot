@@ -9,10 +9,10 @@
  * All heavy dependencies are mocked to keep tests unit-level.
  */
 
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
+import { mkdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -70,6 +70,22 @@ vi.mock("../context/builder.js", () => ({
 
 vi.mock("../cron/jobs.js", () => ({
 	createBuiltinJobs: vi.fn(() => []),
+}));
+
+vi.mock("../knowledge-feed/feed-store.js", () => ({
+	FeedStore: vi.fn().mockImplementation(() => ({})),
+}));
+
+vi.mock("../knowledge-feed/publisher.js", () => ({
+	FeedPublisher: vi.fn().mockImplementation(() => ({
+		publish: vi.fn(async () => null),
+	})),
+}));
+
+vi.mock("../knowledge-feed/subscriber.js", () => ({
+	FeedSubscriber: vi.fn().mockImplementation(() => ({
+		poll: vi.fn(async () => ({ imported: 0, skipped: 0 })),
+	})),
 }));
 
 vi.mock("../cron/service.js", () => ({
@@ -142,8 +158,8 @@ vi.mock("./pointer.js", () => ({
 // Import after mocks
 // ---------------------------------------------------------------------------
 
-import { runDaemon } from "./lifecycle.js";
 import type { AppConfig } from "../utils/config.js";
+import { runDaemon } from "./lifecycle.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -166,10 +182,10 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 			claudeModel: "sonnet",
 			maxTurns: 10,
 			skipPermissions: false,
-			collaboration: {
-				enabled: false,
-				role: "general",
-			},
+			git: { enabled: false, autoSync: false },
+			collaboration: { enabled: false, role: "general" },
+			smartModelSelection: { enabled: false, defaultModel: "sonnet" },
+			evaluation: { enabled: false, probability: 0.3, maxPendingCount: 5 },
 		},
 		...overrides,
 	};
@@ -217,7 +233,9 @@ describe("runDaemon — CLI fallback", () => {
 
 describe("runDaemon — Discord channel", () => {
 	it("initializes discord plugin when discord config present", async () => {
-		const { createDiscordPlugin } = await import("../channel/discord/plugin.js");
+		const { createDiscordPlugin } = await import(
+			"../channel/discord/plugin.js"
+		);
 		const { createCliPlugin } = await import("../channel/cli/plugin.js");
 		vi.mocked(createDiscordPlugin).mockClear();
 		vi.mocked(createCliPlugin).mockClear();
@@ -230,7 +248,7 @@ describe("runDaemon — Discord channel", () => {
 		});
 
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(createDiscordPlugin).toHaveBeenCalledTimes(1);
@@ -240,7 +258,9 @@ describe("runDaemon — Discord channel", () => {
 
 describe("runDaemon — Telegram channel", () => {
 	it("initializes telegram plugin when telegram config present", async () => {
-		const { createTelegramPlugin } = await import("../channel/telegram/plugin.js");
+		const { createTelegramPlugin } = await import(
+			"../channel/telegram/plugin.js"
+		);
 		const { createCliPlugin } = await import("../channel/cli/plugin.js");
 		vi.mocked(createTelegramPlugin).mockClear();
 		vi.mocked(createCliPlugin).mockClear();
@@ -253,7 +273,7 @@ describe("runDaemon — Telegram channel", () => {
 		});
 
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(createTelegramPlugin).toHaveBeenCalledTimes(1);
@@ -266,9 +286,7 @@ describe("runDaemon — crash recovery pointer", () => {
 		const { PointerManager } = await import("./pointer.js");
 
 		const existingPointer = {
-			activeSessions: [
-				{ sessionKey: "u1:c1", channelId: "c1", userId: "u1" },
-			],
+			activeSessions: [{ sessionKey: "u1:c1", channelId: "c1", userId: "u1" }],
 			startedAt: Date.now() - 5000,
 			pid: 99999,
 		};
@@ -288,7 +306,7 @@ describe("runDaemon — crash recovery pointer", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(readMock).toHaveBeenCalled();
@@ -311,7 +329,7 @@ describe("runDaemon — crash recovery pointer", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(readMock).toHaveBeenCalled();
@@ -335,7 +353,7 @@ describe("runDaemon — process lock", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(acquireMock).toHaveBeenCalledTimes(1);
@@ -366,7 +384,9 @@ describe("runDaemon — process lock", () => {
 
 		const config = makeConfig({ channels: {} });
 
-		await expect(runDaemon(config, signal, dataDir)).rejects.toThrow("write error");
+		await expect(runDaemon(config, signal, dataDir)).rejects.toThrow(
+			"write error",
+		);
 		expect(releaseMock).toHaveBeenCalledTimes(1);
 	});
 });
@@ -392,7 +412,7 @@ describe("runDaemon — shutdown sequence", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(disconnectMock).toHaveBeenCalledTimes(1);
@@ -413,7 +433,7 @@ describe("runDaemon — shutdown sequence", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(shutdownMock).toHaveBeenCalledTimes(1);
@@ -434,7 +454,7 @@ describe("runDaemon — shutdown sequence", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(clearMock).toHaveBeenCalled();
@@ -473,10 +493,12 @@ describe("runDaemon — shutdown sequence", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
-		expect(order.indexOf("cron-stop")).toBeLessThan(order.indexOf("plugin-disconnect"));
+		expect(order.indexOf("cron-stop")).toBeLessThan(
+			order.indexOf("plugin-disconnect"),
+		);
 	});
 });
 
@@ -496,7 +518,7 @@ describe("runDaemon — pointer refresh interval", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		// write() called at least once for initial pointer write
