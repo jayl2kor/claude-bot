@@ -13,6 +13,6 @@ growthReport:
   intervalMs: 604800000
 cronReport:
   enabled: true
-  channelId: "1491529287415631985"
+  channelId: "1491532817790668862"
 collaboration:
   enabled: true

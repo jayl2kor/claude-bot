@@ -10,9 +10,10 @@ growthReport:
   intervalMs: 604800000
 cronReport:
   enabled: true
-  channelId: "1491529287415631985"
+  channelId: "1491532812246061058"
 collaboration:
   enabled: true
 prReview:
   enabled: true
   pollIntervalMs: 300000
+  channelId: "1491531140417192106"

@@ -14,6 +14,6 @@ gitWatcher:
   branches: ["main", "master"]
 cronReport:
   enabled: true
-  channelId: "1491529287415631985"
+  channelId: "1491532815928397864"
 collaboration:
   enabled: true

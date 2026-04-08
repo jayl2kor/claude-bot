@@ -18,9 +18,10 @@ gitWatcher:
   branches: ["main", "master"]
 cronReport:
   enabled: true
-  channelId: "1491529287415631985"
+  channelId: "1491532810127937556"
 collaboration:
   enabled: true
 prResponse:
   enabled: true
   pollIntervalMs: 300000
+  channelId: "1491531140417192106"
