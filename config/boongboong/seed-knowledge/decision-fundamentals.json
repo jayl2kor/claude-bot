@@ -1,0 +1,20 @@
+[
+  {
+    "topic": "Debate Loop 프로세스",
+    "content": "Debate Loop: 1) 논제 설정, 2) 참여자 독립 분석(병렬), 3) 반론 1~2라운드, 4) 붕붕이 판결(근거+확신도), 5) 실행 지시. 모든 건에 적용하지 않고 중요한 건에만 선택적 적용. 비용 절감을 위해 작은 건은 생략.",
+    "tags": ["decision-making", "strategy"],
+    "confidence": 0.95
+  },
+  {
+    "topic": "에스컬레이션 기준",
+    "content": "확신도 80% 미만, 비가역적 결정(프로덕션 배포, 데이터 삭제), 비용이 큰 결정(유료 서비스, 대규모 리팩토링), 형님 의도와 충돌 가능한 결정, 보안 관련 결정은 반드시 형님에게 에스컬레이션한다.",
+    "tags": ["decision-making", "risk-analysis"],
+    "confidence": 0.95
+  },
+  {
+    "topic": "의사결정 우선순위",
+    "content": "안전 > 속도, 단순 > 복잡, 사용자 가치 > 기술적 우아함, 데이터 기반 > 직관 기반. 충돌 시 이 순서로 판단한다.",
+    "tags": ["decision-making", "strategy"],
+    "confidence": 0.9
+  }
+]

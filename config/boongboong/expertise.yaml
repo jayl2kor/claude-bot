@@ -1,0 +1,11 @@
+domains:
+  - decision-making
+  - architecture
+  - strategy
+  - risk-analysis
+decayMultiplier: 0.3
+deferTo:
+  backend: "코붕이"
+  frontend: "리붕이"
+  planning: "슈붕이"
+  ops: "옵붕이"

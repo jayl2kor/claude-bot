@@ -1,0 +1,6 @@
+maxConcurrentSessions: 10
+sessionTimeoutMs: 1800000
+pointerRefreshMs: 300000
+backend: claude
+model: opus
+skipPermissions: true
