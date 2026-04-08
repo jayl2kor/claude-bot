@@ -262,7 +262,7 @@ export class MessageRouter {
 		// Also capture final result for integration
 		let resultText = "";
 		handle.onResult((result: ExecutorResult) => {
-			resultText = result.result;
+			resultText = result.text;
 		});
 
 		// Wait for process to fully complete

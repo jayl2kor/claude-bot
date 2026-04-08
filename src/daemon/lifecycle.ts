@@ -178,7 +178,6 @@ export async function runDaemon(
 			maxConcurrentSessions: config.daemon.maxConcurrentSessions,
 			sessionTimeoutMs: config.daemon.sessionTimeoutMs,
 			model: config.daemon.model,
-			claudeModel: config.daemon.claudeModel,
 			maxTurns: config.daemon.maxTurns,
 			skipPermissions: config.daemon.skipPermissions,
 			storeDir: resolve(DATA_DIR, "sessions"),
@@ -407,7 +406,6 @@ export async function runDaemon(
 			expertiseConfig: config.expertise,
 			uploadDir,
 			attachmentRetentionDays: attachmentConfig.retentionDays,
-			expertiseConfig: config.expertise,
 		})) {
 			cronService.add(job);
 		}
@@ -491,41 +489,6 @@ export async function runDaemon(
 				});
 			}
 		}
-
-		// 11c. Growth report cron job (optional, disabled by default)
-		const growthReportConfig = config.daemon.growthReport;
-		if (growthReportConfig.enabled) {
-			const growthCollector = new GrowthCollector({
-				knowledge,
-				relationships,
-				reflections,
-				sessionStore,
-				activityTracker,
-				persona: personaManager,
-			});
-			const growthHistoryStore = new FileReportHistoryStore(
-				resolve(DATA_DIR, "memory", "growth-reports"),
-			);
-			const growthReporter = new GrowthReporter({
-				personaName: config.persona.name,
-				language: growthReportConfig.language,
-				historyStore: growthHistoryStore,
-			});
-			const growthJob = createGrowthReportJob({
-				growthReportConfig,
-				collector: growthCollector,
-				reporter: growthReporter,
-				plugins,
-			});
-			if (growthJob) {
-				cronService.add(growthJob);
-				logger.info("Growth report job registered", {
-					intervalMs: growthReportConfig.intervalMs,
-					channelId: growthReportConfig.channelId,
-				});
-			}
-		}
-
 
 		await cronService.start(signal);
 

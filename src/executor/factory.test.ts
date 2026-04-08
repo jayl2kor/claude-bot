@@ -1,14 +1,22 @@
 import { describe, expect, it } from "vitest";
+import { createClaudeExecutor } from "./claude-spawner.js";
+import { createCodexExecutor } from "./codex-spawner.js";
 import { createExecutor } from "./factory.js";
 
 describe("createExecutor", () => {
-	it("returns a callable executor for claude backend", () => {
+	it("returns the Claude executor for claude backend", () => {
 		const executor = createExecutor("claude");
-		expect(typeof executor).toBe("function");
+		expect(executor).toBe(createClaudeExecutor);
 	});
 
-	it("returns a callable executor for codex backend", () => {
+	it("returns the Codex executor for codex backend", () => {
 		const executor = createExecutor("codex");
-		expect(typeof executor).toBe("function");
+		expect(executor).toBe(createCodexExecutor);
+	});
+
+	it("throws for unsupported backend at runtime", () => {
+		expect(() => createExecutor("invalid-backend" as never)).toThrow(
+			"Unsupported backend",
+		);
 	});
 });

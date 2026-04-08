@@ -21,16 +21,11 @@ export type ExecutorSpawnOptions = {
 
 /**
  * Normalized final result.
- * `result`/`session_id`/`is_error` fields are kept for backward compatibility
- * with existing Claude-oriented call sites.
  */
 export type ExecutorResult = {
 	text: string;
-	result: string;
 	isError: boolean;
-	is_error?: boolean;
 	sessionId?: string;
-	session_id?: string;
 };
 
 export type ExecutorHandle = {
@@ -40,7 +35,7 @@ export type ExecutorHandle = {
 	readonly done: Promise<SessionDoneStatus>;
 	readonly activities: SessionActivity[];
 	readonly lastStderr: string[];
-	currentActivity: SessionActivity | null;
+	readonly currentActivity: SessionActivity | null;
 	onText(cb: (text: string) => void): void;
 	onResult(cb: (result: ExecutorResult) => void): void;
 	kill(): void;

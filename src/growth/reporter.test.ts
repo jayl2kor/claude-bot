@@ -16,15 +16,16 @@ import type { GrowthDelta, GrowthStats, ReportHistory } from "./types.js";
 vi.mock("../executor/spawner.js", () => ({
 	spawnClaude: vi.fn(() => {
 		const resultCallbacks: Array<
-			(r: { result: string; session_id?: string }) => void
+			(r: { text: string; isError: boolean; sessionId?: string }) => void
 		> = [];
 		return {
-			onResult: (cb: (r: { result: string }) => void) => {
+			onResult: (cb: (r: { text: string; isError: boolean }) => void) => {
 				resultCallbacks.push(cb);
 				// Simulate immediate result
 				cb({
-					result:
+					text:
 						"# Weekly Growth Report\n\nI learned a lot this week! Had 30 conversations with 5 friends.",
+					isError: false,
 				});
 			},
 			done: Promise.resolve("completed"),

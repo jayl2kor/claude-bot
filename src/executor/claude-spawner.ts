@@ -92,11 +92,8 @@ export function createClaudeExecutor(opts: SpawnOptions): SessionHandle {
 				resolvedSessionId = result.session_id;
 				const normalized: ExecutorResult = {
 					text: result.result,
-					result: result.result,
 					isError: result.is_error,
-					is_error: result.is_error,
 					sessionId: result.session_id,
-					session_id: result.session_id,
 				};
 				for (const cb of resultCallbacks) cb(normalized);
 			}
@@ -135,9 +132,6 @@ export function createClaudeExecutor(opts: SpawnOptions): SessionHandle {
 		lastStderr,
 		get currentActivity() {
 			return currentActivity;
-		},
-		set currentActivity(_) {
-			// read-only externally, settable internally via closure
 		},
 		onText(cb) {
 			textCallbacks.push(cb);

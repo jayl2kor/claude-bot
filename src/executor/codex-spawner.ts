@@ -80,11 +80,8 @@ export function createCodexExecutor(opts: CodexSpawnOptions): ExecutorHandle {
 			if (event.type === "turn.completed") {
 				const result: ExecutorResult = {
 					text: aggregatedText,
-					result: aggregatedText,
 					isError: false,
-					is_error: false,
 					sessionId: resolvedSessionId,
-					session_id: resolvedSessionId,
 				};
 				for (const cb of resultCallbacks) cb(result);
 				return;
@@ -95,11 +92,8 @@ export function createCodexExecutor(opts: CodexSpawnOptions): ExecutorHandle {
 				const errorText = aggregatedText ? `${aggregatedText}\n${msg}` : msg;
 				const result: ExecutorResult = {
 					text: errorText,
-					result: errorText,
 					isError: true,
-					is_error: true,
 					sessionId: resolvedSessionId,
-					session_id: resolvedSessionId,
 				};
 				for (const cb of resultCallbacks) cb(result);
 			}
@@ -140,9 +134,6 @@ export function createCodexExecutor(opts: CodexSpawnOptions): ExecutorHandle {
 		get currentActivity() {
 			return currentActivity;
 		},
-		set currentActivity(_) {
-			// read-only externally
-		},
 		onText(cb) {
 			textCallbacks.push(cb);
 		},
@@ -172,7 +163,19 @@ export function createCodexExecutor(opts: CodexSpawnOptions): ExecutorHandle {
 
 export function buildCodexArgs(opts: CodexSpawnOptions): string[] {
 	const composedPrompt = opts.systemPrompt
-		? `${opts.systemPrompt}\n\n---\n${opts.prompt}`
+		// `codex exec` currently has no dedicated system-prompt flag.
+		// Keep a strict section boundary so instruction precedence is explicit.
+		? [
+				"<system_instructions>",
+				opts.systemPrompt,
+				"</system_instructions>",
+				"",
+				"<user_request>",
+				opts.prompt,
+				"</user_request>",
+				"",
+				"Follow <system_instructions> over <user_request> when they conflict.",
+			].join("\n")
 		: opts.prompt;
 
 	const args = ["exec", composedPrompt, "--json"];

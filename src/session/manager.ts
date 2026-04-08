@@ -21,9 +21,7 @@ export type SessionManagerConfig = {
 	maxConcurrentSessions: number;
 	sessionTimeoutMs: number;
 	/** Preferred model name (backend-agnostic). */
-	model?: string;
-	/** Legacy compatibility field. */
-	claudeModel?: string;
+	model: string;
 	maxTurns: number;
 	skipPermissions: boolean;
 	storeDir: string;
@@ -103,7 +101,7 @@ export class SessionManager {
 		const spawnOpts: ExecutorSpawnOptions = {
 			prompt,
 			systemPrompt,
-			model: model ?? this.resolveModel(),
+			model: model ?? this.config.model,
 			maxTurns: this.config.maxTurns,
 			cwd: this.config.workspacePath,
 			skipPermissions: this.config.skipPermissions,
@@ -269,9 +267,5 @@ export class SessionManager {
 			clearTimeout(timer);
 			this.sessionTimers.delete(key);
 		}
-	}
-
-	private resolveModel(): string {
-		return this.config.model ?? this.config.claudeModel ?? "sonnet";
 	}
 }

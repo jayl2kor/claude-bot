@@ -24,7 +24,7 @@ export class GitReviewer {
 
 		let reviewText = "";
 		handle.onResult((r) => {
-			reviewText = r.result;
+			reviewText = r.text;
 		});
 
 		const status = await handle.done;

@@ -125,7 +125,7 @@ export class SessionIntegrator {
 
 			let resultText = "";
 			handle.onResult((r) => {
-				resultText = r.result;
+				resultText = r.text;
 			});
 
 			const status = await handle.done;

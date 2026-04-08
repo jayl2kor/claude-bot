@@ -49,8 +49,8 @@ export class GrowthReporter {
 		const handle = spawnClaude({ prompt, model: "haiku", maxTurns: 1 });
 		let reportText = "";
 		handle.onResult((r) => {
-			if (!r.is_error) {
-				reportText = r.result;
+			if (!r.isError) {
+				reportText = r.text;
 			}
 		});
 		await handle.done;
