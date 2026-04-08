@@ -2,5 +2,14 @@ maxConcurrentSessions: 10
 sessionTimeoutMs: 1800000
 pointerRefreshMs: 300000
 backend: claude
-model: opus
+model: sonnet
 skipPermissions: true
+smartModelSelection:
+  enabled: true
+knowledgeFeed:
+  enabled: true
+growthReport:
+  enabled: true
+  intervalMs: 604800000
+collaboration:
+  enabled: true

@@ -2,5 +2,14 @@ maxConcurrentSessions: 10
 sessionTimeoutMs: 1800000
 pointerRefreshMs: 300000
 backend: codex
-model: o4-mini
 skipPermissions: true
+knowledgeFeed:
+  enabled: true
+growthReport:
+  enabled: true
+  intervalMs: 604800000
+collaboration:
+  enabled: true
+prReview:
+  enabled: true
+  pollIntervalMs: 300000
