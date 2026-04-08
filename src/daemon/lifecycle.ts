@@ -211,7 +211,7 @@ export async function runDaemon(
 			feedPublisher,
 		);
 
-		// 8b. Initialize smart model selection (optional)
+		// 8c. Initialize smart model selection (optional)
 		const smsConfig = config.daemon.smartModelSelection;
 		const modelStatsTracker = new ModelStatsTracker(
 			resolve(DATA_DIR, "model-stats"),
@@ -283,7 +283,7 @@ export async function runDaemon(
 		}
 		await cronService.start(signal);
 
-		// 11. Write initial pointer
+		// 12. Write initial pointer
 		const writePointerState = async () => {
 			const p: DaemonPointer = {
 				activeSessions: sessionManager.getActiveSessionKeys().map((key) => {
@@ -301,7 +301,7 @@ export async function runDaemon(
 		};
 		await writePointerState();
 
-		// 10. Start pointer refresh interval
+		// 13. Start pointer refresh interval
 		const pointerInterval = setInterval(
 			() => void writePointerState(),
 			config.daemon.pointerRefreshMs,
@@ -312,7 +312,7 @@ export async function runDaemon(
 			persona: config.persona.name,
 		});
 
-		// 11. Wait for shutdown signal
+		// 14. Wait for shutdown signal
 		await new Promise<void>((resolve) => {
 			signal.addEventListener("abort", () => resolve(), { once: true });
 		});

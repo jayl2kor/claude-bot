@@ -9,13 +9,8 @@ export interface FeedEntry {
 	readonly topic: string;
 	readonly content: string;
 	readonly confidence: number;
-	readonly source: string;
+	readonly source: 'taught' | 'inferred' | 'corrected' | 'propagated';
 	readonly tags: readonly string[];
 	readonly publishedAt: number;
 }
 
-export interface FeedImportRecord {
-	readonly feedEntryId: string;
-	readonly importedAt: number;
-	readonly localKnowledgeId: string;
-}

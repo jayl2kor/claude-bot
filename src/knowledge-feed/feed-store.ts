@@ -73,7 +73,7 @@ export class FeedStore {
 			const entries: FeedEntry[] = [];
 			for (const f of files) {
 				if (!f.endsWith(".json")) continue;
-				const id = f.replace(".json", "");
+				const id = f.slice(0, -5);
 				const entry = await this.read(id);
 				if (entry) entries.push(entry);
 			}
