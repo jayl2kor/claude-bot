@@ -60,13 +60,15 @@ export class KnowledgeExtractor {
 
 			if (duplicate) {
 				if (intent.type === "correction") {
-					// Correction overrides existing knowledge
+					// Correction overrides existing knowledge — reset strength
 					const updated: KnowledgeEntry = {
 						...duplicate,
 						content: intent.payload,
 						source: "corrected",
 						confidence: 0.95,
 						updatedAt: Date.now(),
+						strength: 1.0,
+						lastReferencedAt: Date.now(),
 					};
 					await this.knowledge.upsert(updated);
 					entries.push(updated);
@@ -80,16 +82,20 @@ export class KnowledgeExtractor {
 			}
 
 			// New knowledge entry
+			const now = Date.now();
 			const entry: KnowledgeEntry = {
 				id: randomUUID(),
 				topic,
 				content: intent.payload,
 				source: intent.type === "correction" ? "corrected" : "taught",
 				taughtBy: userId,
-				createdAt: Date.now(),
-				updatedAt: Date.now(),
+				createdAt: now,
+				updatedAt: now,
 				confidence: intent.type === "correction" ? 0.95 : 0.85,
 				tags: extractTags(intent.payload),
+				strength: 1.0,
+				lastReferencedAt: now,
+				referenceCount: 0,
 			};
 
 			await this.knowledge.upsert(entry);
@@ -109,6 +115,7 @@ export class KnowledgeExtractor {
 					});
 				});
 			}
+
 
 			stored++;
 		}

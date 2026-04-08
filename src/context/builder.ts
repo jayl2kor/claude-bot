@@ -7,6 +7,8 @@
  */
 
 import { readFile } from "node:fs/promises";
+import type { DelegationBuilder } from "../expertise/defer.js";
+import type { ExpertiseDocLoader } from "../expertise/loader.js";
 import type { ChatHistoryManager } from "../memory/history.js";
 import type { KnowledgeManager } from "../memory/knowledge.js";
 import type { PersonaManager } from "../memory/persona.js";
@@ -14,6 +16,10 @@ import type { ReflectionManager } from "../memory/reflection.js";
 import type { RelationshipManager } from "../memory/relationships.js";
 import type { ChannelChatMessage } from "../plugins/types.js";
 import type { StatusReader } from "../status/reader.js";
+import {
+	estimateTokens,
+	truncateToTokenBudget,
+} from "../utils/tokens.js";
 
 export type ContextBuilderDeps = {
 	persona: PersonaManager;
@@ -24,38 +30,18 @@ export type ContextBuilderDeps = {
 	statusReader?: StatusReader;
 	/** Path to a knowledge.md file with static knowledge for this pet. */
 	knowledgeFilePath?: string;
+	/** Expertise domain knowledge docs loader. */
+	expertiseDocLoader?: ExpertiseDocLoader;
+	/** Delegation builder for cross-pet topic routing. */
+	delegationBuilder?: DelegationBuilder;
 };
-
-/** Rough token estimate: ~4 chars per token for English, ~2 for Korean. */
-function estimateTokens(text: string): number {
-	const koreanChars = (text.match(/[\uAC00-\uD7AF]/g) ?? []).length;
-	const otherChars = text.length - koreanChars;
-	return Math.ceil(koreanChars / 2 + otherChars / 4);
-}
-
-/** Truncate text to fit within a token budget. */
-function truncateToTokenBudget(text: string, budget: number): string {
-	if (estimateTokens(text) <= budget) return text;
-
-	// Binary search for the right cutoff
-	let lo = 0;
-	let hi = text.length;
-	while (lo < hi) {
-		const mid = Math.ceil((lo + hi) / 2);
-		if (estimateTokens(text.slice(0, mid)) <= budget) {
-			lo = mid;
-		} else {
-			hi = mid - 1;
-		}
-	}
-	return `${text.slice(0, lo)}...`;
-}
 
 const TOKEN_BUDGETS = {
 	persona: 500,
 	relationship: 400,
 	knowledge: 1500,
 	reflections: 600,
+	review: 400,
 };
 
 export class ContextBuilder {
@@ -83,10 +69,12 @@ export class ContextBuilder {
 		const [
 			personaSection,
 			relSection,
-			knowledgeSection,
+			knowledgeResult,
 			reflectionSection,
 			historyResults,
 			statusSection,
+			expertiseDocsSection,
+			delegationSection,
 		] = await Promise.all([
 			this.deps.persona.toPromptSection(),
 			this.deps.relationships.toPromptSection(userId),
@@ -96,7 +84,14 @@ export class ContextBuilder {
 			this.deps.reflections.toPromptSection(3),
 			historyPromise,
 			this.deps.statusReader?.toPromptSection() ?? Promise.resolve(null),
+			this.deps.expertiseDocLoader?.toPromptSection() ?? Promise.resolve(null),
+			this.deps.delegationBuilder?.toPromptSection() ?? Promise.resolve(null),
 		]);
+
+		// Fire-and-forget: reinforce knowledge entries included in prompt
+		if (knowledgeResult?.entryIds.length) {
+			void this.deps.knowledge.reinforceMany(knowledgeResult.entryIds);
+		}
 
 		const sections: string[] = [];
 		sections.push(truncateToTokenBudget(personaSection, TOKEN_BUDGETS.persona));
@@ -116,14 +111,24 @@ export class ContextBuilder {
 			}
 		}
 
+		// Expertise domain knowledge docs (2500 token budget, managed by loader)
+		if (expertiseDocsSection) {
+			sections.push(expertiseDocsSection);
+		}
+
+		// Delegation awareness (400 token budget, managed by builder)
+		if (delegationSection) {
+			sections.push(delegationSection);
+		}
+
 		if (relSection) {
 			sections.push(
 				truncateToTokenBudget(relSection, TOKEN_BUDGETS.relationship),
 			);
 		}
-		if (knowledgeSection) {
+		if (knowledgeResult) {
 			sections.push(
-				truncateToTokenBudget(knowledgeSection, TOKEN_BUDGETS.knowledge),
+				truncateToTokenBudget(knowledgeResult.text, TOKEN_BUDGETS.knowledge),
 			);
 		}
 		if (reflectionSection) {
@@ -160,7 +165,33 @@ export class ContextBuilder {
 		// 8. Meta instructions
 		sections.push(buildMetaInstructions());
 
+		// 9. Fading knowledge review prompt (only when there is a query — avoids
+		//    unnecessary I/O on system-prompt-only builds with no user message)
+		if (recentQuery) {
+			const reviewSection = await this.toReviewPromptSection();
+			if (reviewSection) {
+				sections.push(reviewSection);
+			}
+		}
+
 		return sections.join("\n\n");
+	}
+
+	/**
+	 * Build a prompt section that reminds the pet about fading memories.
+	 * Budget: 400 tokens. The pet can naturally mention these to reinforce them.
+	 */
+	async toReviewPromptSection(): Promise<string | null> {
+		const fading = await this.deps.knowledge.listFading(3);
+		if (fading.length === 0) return null;
+
+		const lines = ["# 잊혀져가는 기억 (자연스럽게 언급하면 기억이 강화돼요)"];
+		for (const entry of fading) {
+			const pct = Math.round(entry.strength * 100);
+			lines.push(`- [${entry.topic}] ${entry.content} (강도: ${pct}%)`);
+		}
+
+		return truncateToTokenBudget(lines.join("\n"), TOKEN_BUDGETS.review);
 	}
 }
 

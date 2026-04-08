@@ -20,6 +20,12 @@ import type { ModelStatsTracker } from "../model/stats.js";
 import type { ChannelPlugin, IncomingMessage } from "../plugins/types.js";
 import { BoundedUUIDSet } from "../session/dedup.js";
 import type { SessionManager } from "../session/manager.js";
+import { detectStudyCommand } from "../study/detector.js";
+import type { StudyQueue } from "../study/queue.js";
+import {
+	detectStatusCheck,
+	formatStatusResponse,
+} from "../study/status-checker.js";
 import { detectTeaching } from "../teaching/detector.js";
 import { KnowledgeExtractor } from "../teaching/extractor.js";
 import type { SessionIntegrator } from "../teaching/integrator.js";
@@ -35,9 +41,11 @@ export type MessageRouterDeps = {
 	history: ChatHistoryManager;
 	integrator: SessionIntegrator;
 	plugins: ChannelPlugin[];
+	studyQueue?: StudyQueue;
 	smartModelSelection?: {
 		enabled: boolean;
 		statsTracker: ModelStatsTracker;
+		defaultModel?: import("../model/types.js").ModelTier;
 	};
 };
 
@@ -132,6 +140,36 @@ export class MessageRouter {
 		// Record relationship (fire and forget)
 		void this.deps.relationships.recordInteraction(msg.userId, msg.userName);
 
+		// Study status check — respond with queue status
+		if (this.deps.studyQueue && detectStatusCheck(msg.content)) {
+			const state = await this.deps.studyQueue.getState();
+			const response = formatStatusResponse(state);
+			await plugin.sendMessage(msg.channelId, response, msg.id);
+			return;
+		}
+
+		// Study command detection — enqueue topic and respond immediately
+		if (this.deps.studyQueue) {
+			const studyCmd = detectStudyCommand(msg.content);
+			if (studyCmd.detected && studyCmd.topic) {
+				const result = await this.deps.studyQueue.enqueue(studyCmd.topic);
+				if (result.success) {
+					await plugin.sendMessage(
+						msg.channelId,
+						`네 형님! "${studyCmd.topic}"에 대해 공부해보겠습니다. 잠시만 기다려주세요!`,
+						msg.id,
+					);
+				} else {
+					await plugin.sendMessage(
+						msg.channelId,
+						result.reason ?? "학습 요청을 처리할 수 없습니다.",
+						msg.id,
+					);
+				}
+				return;
+			}
+		}
+
 		// Real-time teaching detection — store immediately before session
 		const intents = detectTeaching(msg.content);
 		if (intents.length > 0) {
@@ -166,6 +204,7 @@ export class MessageRouter {
 				timestamp: msg.timestamp,
 				previousModel: cached?.model,
 				previousTimestamp: cached?.timestamp,
+				defaultModel: sms.defaultModel,
 			});
 			selectedModel = classification.tier;
 			sms.statsTracker.setSessionModel(

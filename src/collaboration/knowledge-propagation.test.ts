@@ -12,7 +12,7 @@
  * 6. Edge cases: empty source, all below threshold, all already known.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { KnowledgeEntry } from "../memory/knowledge.js";
 import type { KnowledgePropagatorDeps } from "./knowledge-propagation.js";
 import {
@@ -171,6 +171,20 @@ describe("propagateKnowledge — strength reduction", () => {
 		expect(upsertedEntry.id).toBe("e-upsert");
 		expect(upsertedEntry.topic).toBe(entry.topic);
 		expect(upsertedEntry.content).toBe(entry.content);
+	});
+
+	it("stores the knowledge entry in target with source 'propagated'", async () => {
+		const entry = makeEntry({ id: "e-source", confidence: 0.9, source: "taught" });
+		const deps = makeDeps([entry], []);
+		const targetUpsert = vi.mocked(
+			(deps.targetKnowledge as unknown as MockKnowledgeManager).upsert,
+		);
+
+		await propagateKnowledge("petA", "petB", deps);
+
+		expect(targetUpsert).toHaveBeenCalledOnce();
+		const upsertedEntry = targetUpsert.mock.calls[0]![0] as KnowledgeEntry;
+		expect(upsertedEntry.source).toBe("propagated");
 	});
 
 	it("uses PROPAGATION_STRENGTH_FACTOR exactly", async () => {
@@ -358,6 +372,22 @@ describe("propagateKnowledge — edge cases", () => {
 
 		expect(result.propagated).toHaveLength(7);
 		expect(result.skippedLowConfidence).toBe(3);
+	});
+});
+
+describe("propagateKnowledge — input validation", () => {
+	it("throws when sourcePetId is empty", async () => {
+		const deps = makeDeps([], []);
+		await expect(propagateKnowledge("", "petB", deps)).rejects.toThrow(
+			"sourcePetId must not be empty",
+		);
+	});
+
+	it("throws when targetPetId is empty", async () => {
+		const deps = makeDeps([], []);
+		await expect(propagateKnowledge("petA", "", deps)).rejects.toThrow(
+			"targetPetId must not be empty",
+		);
 	});
 });
 

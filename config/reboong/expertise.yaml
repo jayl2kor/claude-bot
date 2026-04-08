@@ -1,0 +1,7 @@
+domains:
+  - frontend
+  - react
+  - css
+decayMultiplier: 0.3
+deferTo:
+  backend: "꼬붕이"

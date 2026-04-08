@@ -63,6 +63,8 @@ export type CronJobDeps = {
 	uploadDir?: string;
 	/** Attachment retention in days (default: 7). */
 	attachmentRetentionDays?: number;
+	/** Peer pets' knowledge stores for cross-pet knowledge propagation (Issue #6). */
+	peerKnowledge?: PeerKnowledge[];
 	expertiseConfig?: ExpertiseConfig;
 };
 

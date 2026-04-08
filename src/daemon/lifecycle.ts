@@ -404,6 +404,7 @@ export async function runDaemon(
 			expertiseConfig: config.expertise,
 			uploadDir,
 			attachmentRetentionDays: attachmentConfig.retentionDays,
+			expertiseConfig: config.expertise,
 		})) {
 			cronService.add(job);
 		}

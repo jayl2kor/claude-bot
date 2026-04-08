@@ -39,7 +39,13 @@ export async function handleMemorySearch(
 					: entry.source === "corrected"
 						? "수정됨"
 						: "추론";
-			sections.push(`> **${entry.topic}** (${source})\n> ${entry.content}`);
+			const strengthPct = Math.round(entry.strength * 100);
+			const filled = Math.round(entry.strength * 6);
+			const empty = 6 - filled;
+			const bar = `${"█".repeat(filled)}${"░".repeat(empty)}`;
+			sections.push(
+				`> **${entry.topic}** (${source}) [강도: ${bar} ${strengthPct}%]\n> ${entry.content}`,
+			);
 		}
 	}
 
