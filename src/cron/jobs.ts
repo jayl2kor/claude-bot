@@ -5,10 +5,13 @@
  * - soul-evolution: Analyze accumulated knowledge to evolve persona soul
  * - session-cleanup: Archive old session records
  * - proactive-message: Send a greeting or check-in (optional)
+ * - growth-report: Auto-generate periodic growth reports (optional)
  */
 
 import type { CollaborationManager } from "../collaboration/manager.js";
 import { spawnClaude } from "../executor/spawner.js";
+import { GrowthCollector } from "../growth/collector.js";
+import type { GrowthReporter } from "../growth/reporter.js";
 import { analyzeActivity } from "../memory/activity-analyzer.js";
 import type { ActivityTracker } from "../memory/activity.js";
 import type { ChatHistoryManager } from "../memory/history.js";
@@ -18,6 +21,7 @@ import type { ReflectionManager } from "../memory/reflection.js";
 import type { RelationshipManager } from "../memory/relationships.js";
 import type { ChannelPlugin } from "../plugins/types.js";
 import type { SessionStore } from "../session/store.js";
+import type { GrowthReportConfig } from "../utils/config.js";
 import { logger } from "../utils/logger.js";
 import type { CronJob } from "./service.js";
 
@@ -68,6 +72,12 @@ export function createBuiltinJobs(deps: CronJobDeps): CronJob[] {
 			intervalMs: 10 * 60 * 1000, // 10 minutes
 			runOnStart: false,
 			handler: () => runActivityMonitor(deps),
+		},
+		{
+			id: "memory-decay",
+			intervalMs: SIX_HOURS,
+			runOnStart: false,
+			handler: () => runMemoryDecay(deps),
 		},
 		{
 			id: "history-prune",
@@ -324,5 +334,144 @@ async function runHistoryPrune(deps: CronJobDeps): Promise<void> {
 			pruned: totalPruned,
 			channels: channels.length,
 		});
+	}
+}
+
+/**
+ * Memory decay — apply Ebbinghaus forgetting curve to all knowledge entries
+ * and archive entries that have decayed below the archive threshold.
+ */
+async function runMemoryDecay(deps: CronJobDeps): Promise<void> {
+	await deps.knowledge.applyDecayAll();
+	const archived = await deps.knowledge.archiveWeak();
+
+	logger.info("Memory decay completed", { archived });
+}
+
+// ---------------------------------------------------------------------------
+// Git watcher cron job
+// ---------------------------------------------------------------------------
+
+export type GitWatcherJobDeps = {
+	readonly watcher: import("../git/watcher.js").GitWatcher;
+	readonly reviewer: import("../git/reviewer.js").GitReviewer;
+	readonly plugins: ChannelPlugin[];
+	readonly reviewChannelId: string;
+	readonly pollIntervalMs: number;
+};
+
+/**
+ * Create a git-watcher cron job if the watcher is active.
+ * Returns null if the watcher is disabled or inactive.
+ */
+export function createGitWatcherJob(deps: GitWatcherJobDeps): CronJob | null {
+	if (!deps.watcher.isActive) return null;
+
+	return {
+		id: "git-watcher",
+		intervalMs: deps.pollIntervalMs,
+		runOnStart: false,
+		handler: () => runGitWatcher(deps),
+	};
+}
+
+/**
+ * Git watcher — poll branches for new commits, generate reviews, send to channel.
+ */
+async function runGitWatcher(deps: GitWatcherJobDeps): Promise<void> {
+	const { watcher, reviewer, plugins } = deps;
+
+	if (!watcher.isActive || plugins.length === 0) return;
+
+	const plugin = plugins[0];
+	const config = watcher.getState();
+
+	for (const branch of Object.keys(config.lastCheckedSha)) {
+		if (watcher.isRateLimited()) {
+			logger.debug("Git watcher rate limited, skipping", { branch });
+			break;
+		}
+
+		try {
+			const commits = await watcher.poll(branch);
+
+			for (const commit of commits) {
+				if (watcher.isRateLimited()) break;
+
+				const diff = await watcher.getDiff(commit.sha);
+				const message = await reviewer.review(commit, diff);
+				await reviewer.sendReview(plugin, deps.reviewChannelId, message);
+
+				watcher.recordReview();
+			}
+		} catch (err) {
+			logger.error("Git watcher poll failed", {
+				branch,
+				error: String(err),
+			});
+		}
+	}
+
+	await watcher.persistState();
+}
+
+// ---------------------------------------------------------------------------
+// Growth report cron job
+// ---------------------------------------------------------------------------
+
+export type GrowthReportJobDeps = {
+	readonly growthReportConfig: GrowthReportConfig;
+	readonly collector: GrowthCollector;
+	readonly reporter: GrowthReporter;
+	readonly plugins: ChannelPlugin[];
+};
+
+/**
+ * Create a growth-report cron job if enabled in config.
+ * Returns null if the feature is disabled.
+ */
+export function createGrowthReportJob(
+	deps: GrowthReportJobDeps,
+): CronJob | null {
+	if (!deps.growthReportConfig.enabled) return null;
+
+	return {
+		id: "growth-report",
+		intervalMs: deps.growthReportConfig.intervalMs,
+		runOnStart: false,
+		handler: () => runGrowthReport(deps),
+	};
+}
+
+/**
+ * Growth report — aggregate stats and generate a persona-voice report.
+ */
+async function runGrowthReport(deps: GrowthReportJobDeps): Promise<void> {
+	const periodEnd = Date.now();
+	const periodStart = periodEnd - deps.growthReportConfig.intervalMs;
+
+	try {
+		const stats = await deps.collector.collect(periodStart, periodEnd);
+
+		const previousHistory = await deps.reporter.getLatestHistory();
+		const delta = GrowthCollector.computeDelta(stats, previousHistory);
+
+		const report = await deps.reporter.generateReport(stats, delta);
+
+		// Send to configured channel (or first available plugin)
+		const channelId = deps.growthReportConfig.channelId;
+		if (channelId && deps.plugins.length > 0) {
+			await deps.reporter.sendToChannel(report, deps.plugins[0], channelId);
+		}
+
+		await deps.reporter.saveHistory(report);
+
+		logger.info("Growth report job completed", {
+			reportId: report.id,
+			conversations: stats.conversations.totalCount,
+			knowledge: stats.knowledge.totalCount,
+		});
+	} catch (err) {
+		logger.error("Growth report job failed", { error: String(err) });
 	}
 }
