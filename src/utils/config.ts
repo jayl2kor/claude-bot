@@ -69,6 +69,14 @@ const AttachmentConfigSchema = z.object({
 	retentionDays: z.number().default(7),
 });
 
+const StudyConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	maxDailySessions: z.number().default(5),
+	maxSubTopics: z.number().default(8),
+	model: z.string().default("sonnet"),
+	maxTurns: z.number().default(3),
+});
+
 const KnowledgeFeedConfigSchema = z.object({
 	enabled: z.boolean().default(false),
 	pollIntervalMs: z.number().default(30_000),
@@ -100,6 +108,7 @@ const DaemonConfigSchema = z.object({
 	smartModelSelection: SmartModelSelectionSchema.default({}),
 	attachments: AttachmentConfigSchema.default({}),
 	knowledgeFeed: KnowledgeFeedConfigSchema.default({}),
+	study: StudyConfigSchema.default({}),
 	evaluation: EvaluationConfigSchema.default({}),
 });
 

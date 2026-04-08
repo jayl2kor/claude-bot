@@ -10,6 +10,7 @@
 
 import { cleanOldUploads } from "../attachments/cleanup.js";
 import type { CollaborationManager } from "../collaboration/manager.js";
+import { propagateKnowledge } from "../collaboration/knowledge-propagation.js";
 import type { PeerEvaluator } from "../evaluation/evaluator.js";
 import { spawnClaude } from "../executor/spawner.js";
 import type { ExpertiseConfig } from "../expertise/types.js";
@@ -30,6 +31,11 @@ import type { GrowthReportConfig } from "../utils/config.js";
 import { logger } from "../utils/logger.js";
 import type { CronJob } from "./service.js";
 
+export type PeerKnowledge = {
+	petId: string;
+	knowledge: KnowledgeManager;
+};
+
 export type KnowledgeFeedDeps = {
 	feedStore: FeedStore;
 	feedSubscriber: FeedSubscriber;
@@ -38,6 +44,7 @@ export type KnowledgeFeedDeps = {
 };
 
 export type CronJobDeps = {
+	petId: string;
 	persona: PersonaManager;
 	knowledge: KnowledgeManager;
 	reflections: ReflectionManager;
@@ -53,9 +60,12 @@ export type CronJobDeps = {
 	uploadDir?: string;
 	/** Attachment retention in days (default: 7). */
 	attachmentRetentionDays?: number;
+	/** Peer pets' knowledge stores for cross-pet knowledge propagation (Issue #6). */
+	peerKnowledge?: PeerKnowledge[];
 	expertiseConfig?: ExpertiseConfig;
 };
 
+const ONE_HOUR = 60 * 60 * 1000;
 const SIX_HOURS = 6 * 60 * 60 * 1000;
 const TWELVE_HOURS = 12 * 60 * 60 * 1000;
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
@@ -119,6 +129,16 @@ export function createBuiltinJobs(deps: CronJobDeps): CronJob[] {
 						intervalMs: 5_000, // 5 seconds
 						runOnStart: false,
 						handler: () => deps.collaboration!.pollAndExecute(),
+					},
+				]
+			: []),
+		...(deps.peerKnowledge && deps.peerKnowledge.length > 0
+			? [
+					{
+						id: "knowledge-propagation",
+						intervalMs: ONE_HOUR,
+						runOnStart: false,
+						handler: () => runKnowledgePropagation(deps),
 					},
 				]
 			: []),
@@ -391,6 +411,7 @@ async function runHistoryPrune(deps: CronJobDeps): Promise<void> {
 }
 
 /**
+HEAD
  * Upload cleanup — remove old date-based upload directories.
  */
 async function runUploadCleanup(
@@ -404,7 +425,51 @@ async function runUploadCleanup(
 }
 
 /**
-  * Knowledge feed poll — import new knowledge from other pets.
+/**
+ * Knowledge propagation — share high-confidence knowledge with peer pets.
+ * Runs hourly when peerKnowledge stores are configured (Issue #6).
+ */
+async function runKnowledgePropagation(deps: CronJobDeps): Promise<void> {
+	if (!deps.peerKnowledge || deps.peerKnowledge.length === 0) return;
+
+	let totalPropagated = 0;
+
+	for (const peer of deps.peerKnowledge) {
+		try {
+			const result = await propagateKnowledge(deps.petId, peer.petId, {
+				sourceKnowledge: deps.knowledge,
+				targetKnowledge: peer.knowledge,
+			});
+
+			totalPropagated += result.propagated.length;
+
+			logger.info("Knowledge propagation completed", {
+				sourcePetId: deps.petId,
+				targetPetId: peer.petId,
+				propagated: result.propagated.length,
+				skippedLowConfidence: result.skippedLowConfidence,
+				skippedAlreadyKnown: result.skippedAlreadyKnown,
+			});
+		} catch (err) {
+			logger.warn("Knowledge propagation failed", {
+				sourcePetId: deps.petId,
+				targetPetId: peer.petId,
+				error: String(err),
+			});
+		}
+	}
+
+	if (totalPropagated > 0) {
+		logger.info("Knowledge propagation cycle done", {
+			totalPropagated,
+			peers: deps.peerKnowledge.length,
+		});
+	}
+}	}
+}
+
+/**
+ * Knowledge feed poll — import new knowledge from other pets.
  */
 async function runKnowledgeFeedPoll(deps: KnowledgeFeedDeps): Promise<void> {
 	const result = await deps.feedSubscriber.poll();

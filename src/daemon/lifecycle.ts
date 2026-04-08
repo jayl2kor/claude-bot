@@ -40,6 +40,8 @@ import { SessionManager } from "../session/manager.js";
 import { SessionStore } from "../session/store.js";
 import { StatusReader } from "../status/reader.js";
 import { StatusWriter } from "../status/writer.js";
+import { StudyQueue } from "../study/queue.js";
+import { TopicResearcher } from "../study/researcher.js";
 import { SessionIntegrator } from "../teaching/integrator.js";
 import type { AppConfig } from "../utils/config.js";
 import { logger } from "../utils/logger.js";
@@ -256,7 +258,7 @@ export async function runDaemon(
 			});
 		}
 
-		// 8b. Initialize teaching pipeline
+		// 8a. Initialize teaching pipeline
 		const integrator = new SessionIntegrator(
 			knowledge,
 			reflections,
@@ -284,6 +286,30 @@ export async function runDaemon(
 			});
 		}
 
+		// 8c. Initialize study queue (optional)
+		const studyConfig = config.daemon.study;
+		let studyQueue: StudyQueue | undefined;
+		if (studyConfig.enabled) {
+			studyQueue = new StudyQueue(studyConfig, resolve(DATA_DIR, "study"));
+			const researcher = new TopicResearcher(studyConfig, knowledge);
+			studyQueue.setResearcher(researcher);
+
+			// Wire notification to all channel plugins
+			studyQueue.setNotifyFn((topic, result, error) => {
+				const message = error
+					? `"${topic}" 공부하다가 문제가 생겼어요: ${error}`
+					: `"${topic}" 공부 완료! ${result?.subtopics.length ?? 0}개의 서브토픽을 학습했습니다.`;
+				for (const p of plugins) {
+					void p.sendMessage("", message).catch(() => {});
+				}
+			});
+
+			logger.info("Study feature enabled", {
+				maxDailySessions: studyConfig.maxDailySessions,
+				model: studyConfig.model,
+			});
+		}
+
 		// 9. Wire up message router
 		const router = new MessageRouter({
 			sessionManager,
@@ -295,6 +321,7 @@ export async function runDaemon(
 			history,
 			integrator,
 			plugins,
+			studyQueue,
 			smartModelSelection,
 		});
 		router.start();
@@ -357,6 +384,7 @@ export async function runDaemon(
 		// 12. Initialize and start cron service
 		const cronService = new CronService();
 		for (const job of createBuiltinJobs({
+			petId: config.persona.name,
 			persona: personaManager,
 			knowledge,
 			reflections,
