@@ -11,8 +11,17 @@ import { MessageRouter } from "../channel/router.js";
 import { createTelegramPlugin } from "../channel/telegram/plugin.js";
 import { CollaborationManager } from "../collaboration/manager.js";
 import { ContextBuilder } from "../context/builder.js";
-import { createBuiltinJobs } from "../cron/jobs.js";
+import {
+	createBuiltinJobs,
+	createGitWatcherJob,
+	createGrowthReportJob,
+} from "../cron/jobs.js";
 import { CronService } from "../cron/service.js";
+import { GitReviewer } from "../git/reviewer.js";
+import { GitWatcher } from "../git/watcher.js";
+import { GrowthCollector } from "../growth/collector.js";
+import { FileReportHistoryStore } from "../growth/history-store.js";
+import { GrowthReporter } from "../growth/reporter.js";
 import { ActivityTracker } from "../memory/activity.js";
 import { ChatHistoryManager } from "../memory/history.js";
 import { KnowledgeManager } from "../memory/knowledge.js";
@@ -88,6 +97,7 @@ export async function runDaemon(
 		);
 		const knowledge = new KnowledgeManager(
 			resolve(DATA_DIR, "memory", "knowledge"),
+			resolve(DATA_DIR, "archive", "knowledge"),
 		);
 		const reflections = new ReflectionManager(
 			resolve(DATA_DIR, "memory", "reflections"),
@@ -226,6 +236,72 @@ export async function runDaemon(
 				handler: () => statusWriter.write(),
 			});
 		}
+
+		// 11b. Git watcher cron job (optional, disabled by default)
+		const gitWatcherConfig = config.daemon.gitWatcher;
+		if (gitWatcherConfig.enabled && config.daemon.workspacePath) {
+			const gitWatcher = new GitWatcher(
+				config.daemon.workspacePath,
+				gitWatcherConfig,
+				resolve(DATA_DIR, "state"),
+			);
+			await gitWatcher.init();
+
+			const gitReviewer = new GitReviewer(
+				config.persona.name,
+				config.persona.personality,
+			);
+
+			const gitWatcherJob = createGitWatcherJob({
+				watcher: gitWatcher,
+				reviewer: gitReviewer,
+				plugins,
+				reviewChannelId: gitWatcherConfig.reviewChannelId,
+				pollIntervalMs: gitWatcherConfig.pollIntervalMs,
+			});
+			if (gitWatcherJob) {
+				cronService.add(gitWatcherJob);
+				logger.info("Git watcher job registered", {
+					branches: gitWatcherConfig.branches,
+					pollIntervalMs: gitWatcherConfig.pollIntervalMs,
+				});
+			}
+		}
+
+		// 11c. Growth report cron job (optional, disabled by default)
+		const growthReportConfig = config.daemon.growthReport;
+		if (growthReportConfig.enabled) {
+			const growthCollector = new GrowthCollector({
+				knowledge,
+				relationships,
+				reflections,
+				sessionStore,
+				activityTracker,
+				persona: personaManager,
+			});
+			const growthHistoryStore = new FileReportHistoryStore(
+				resolve(DATA_DIR, "memory", "growth-reports"),
+			);
+			const growthReporter = new GrowthReporter({
+				personaName: config.persona.name,
+				language: growthReportConfig.language,
+				historyStore: growthHistoryStore,
+			});
+			const growthJob = createGrowthReportJob({
+				growthReportConfig,
+				collector: growthCollector,
+				reporter: growthReporter,
+				plugins,
+			});
+			if (growthJob) {
+				cronService.add(growthJob);
+				logger.info("Growth report job registered", {
+					intervalMs: growthReportConfig.intervalMs,
+					channelId: growthReportConfig.channelId,
+				});
+			}
+		}
+
 		await cronService.start(signal);
 
 		// 11. Write initial pointer
