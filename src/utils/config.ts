@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
+import { ExpertiseConfigSchema } from "../expertise/types.js";
 import { isENOENT } from "./errors.js";
 
 const PersonaConfigSchema = z.object({
@@ -34,6 +35,19 @@ const GitConfigSchema = z.object({
 	autoSync: z.boolean().default(false),
 });
 
+const AttachmentConfigSchema = z.object({
+	maxFileSizeMb: z.number().default(10),
+	maxTotalSizeMb: z.number().default(25),
+	retentionDays: z.number().default(7),
+});
+
+const GrowthReportConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	intervalMs: z.number().default(7 * 24 * 60 * 60 * 1000),
+	channelId: z.string().optional(),
+	language: z.string().default("ko"),
+});
+
 const SmartModelSelectionSchema = z.object({
 	enabled: z.boolean().default(false),
 	defaultModel: z.enum(["haiku", "sonnet", "opus"]).default("sonnet"),
@@ -55,10 +69,12 @@ const CollaborationConfigSchema = z.object({
 	sharedDir: z.string().optional(),
 });
 
-const AttachmentConfigSchema = z.object({
-	maxFileSizeMb: z.number().default(10),
-	maxTotalSizeMb: z.number().default(25),
-	retentionDays: z.number().default(7),
+const StudyConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	maxDailySessions: z.number().default(5),
+	maxSubTopics: z.number().default(8),
+	model: z.string().default("sonnet"),
+	maxTurns: z.number().default(3),
 });
 
 const KnowledgeFeedConfigSchema = z.object({
@@ -88,9 +104,11 @@ const DaemonConfigSchema = z.object({
 	git: GitConfigSchema.default({}),
 	gitWatcher: GitWatcherConfigSchema.default({}),
 	collaboration: CollaborationConfigSchema.default({}),
+	growthReport: GrowthReportConfigSchema.default({}),
 	smartModelSelection: SmartModelSelectionSchema.default({}),
 	attachments: AttachmentConfigSchema.default({}),
 	knowledgeFeed: KnowledgeFeedConfigSchema.default({}),
+	study: StudyConfigSchema.default({}),
 	evaluation: EvaluationConfigSchema.default({}),
 });
 
@@ -98,10 +116,12 @@ export const AppConfigSchema = z.object({
 	persona: PersonaConfigSchema.default({}),
 	channels: ChannelsConfigSchema.default({}),
 	daemon: DaemonConfigSchema.default({}),
+	expertise: ExpertiseConfigSchema.default({}),
 });
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
 export type PersonaConfig = z.infer<typeof PersonaConfigSchema>;
+export type GrowthReportConfig = z.infer<typeof GrowthReportConfigSchema>;
 export type GitWatcherConfig = z.infer<typeof GitWatcherConfigSchema>;
 
 /**
@@ -116,7 +136,12 @@ export async function loadConfig(
 	const dir = configDir ?? resolve("config");
 	const raw: Record<string, unknown> = {};
 
-	for (const file of ["persona.yaml", "channels.yaml", "daemon.yaml"]) {
+	for (const file of [
+		"persona.yaml",
+		"channels.yaml",
+		"daemon.yaml",
+		"expertise.yaml",
+	]) {
 		try {
 			const content = await readFile(resolve(dir, file), "utf8");
 			const parsed = parseYaml(substituteEnvVars(content));

@@ -9,6 +9,7 @@
 
 import { cleanOldUploads } from "../attachments/cleanup.js";
 import type { CollaborationManager } from "../collaboration/manager.js";
+import type { ExpertiseConfig } from "../expertise/types.js";
 import type { PeerEvaluator } from "../evaluation/evaluator.js";
 import { spawnClaude } from "../executor/spawner.js";
 import type { FeedStore } from "../knowledge-feed/feed-store.js";
@@ -48,6 +49,7 @@ export type CronJobDeps = {
 	uploadDir?: string;
 	/** Attachment retention in days (default: 7). */
 	attachmentRetentionDays?: number;
+	expertiseConfig?: ExpertiseConfig;
 };
 
 const SIX_HOURS = 6 * 60 * 60 * 1000;

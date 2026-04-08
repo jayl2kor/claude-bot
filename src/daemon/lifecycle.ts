@@ -331,6 +331,7 @@ export async function runDaemon(
 			knowledgeFeed: knowledgeFeedDeps,
 			evaluator: peerEvaluator,
 			plugins,
+			expertiseConfig: config.expertise,
 			uploadDir,
 			attachmentRetentionDays: attachmentConfig.retentionDays,
 		})) {
