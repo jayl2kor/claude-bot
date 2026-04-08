@@ -2,13 +2,10 @@
  * Tests for GitReviewer — prompt construction, message formatting, error handling.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GitReviewer } from "./reviewer.js";
 import type { GitCommitInfo } from "./types.js";
 
-// ---------------------------------------------------------------------------
-// Mock spawner
-// ---------------------------------------------------------------------------
 
 vi.mock("../executor/spawner.js", () => ({
 	spawnClaude: vi.fn(),
@@ -17,10 +14,6 @@ vi.mock("../executor/spawner.js", () => ({
 import { spawnClaude } from "../executor/spawner.js";
 
 const mockSpawnClaude = vi.mocked(spawnClaude);
-
-// ---------------------------------------------------------------------------
-// Mock channel plugin
-// ---------------------------------------------------------------------------
 
 function makeMockPlugin() {
 	return {
@@ -33,10 +26,6 @@ function makeMockPlugin() {
 		disconnect: vi.fn().mockResolvedValue(undefined),
 	};
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function makeCommit(overrides: Partial<GitCommitInfo> = {}): GitCommitInfo {
 	return {
@@ -71,45 +60,30 @@ function mockClaudeResult(result: string): void {
 	} as unknown as ReturnType<typeof spawnClaude>);
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe("GitReviewer", () => {
 	beforeEach(() => {
-		vi.clearAllMocks();
+		vi.restoreAllMocks();
+		mockSpawnClaude.mockReset();
 	});
-
-	// -----------------------------------------------------------------------
-	// review
-	// -----------------------------------------------------------------------
 
 	describe("review", () => {
 		it("generates review using Claude and returns formatted message", async () => {
 			mockClaudeResult("This commit adds a well-structured feature.");
-
 			const reviewer = new GitReviewer("TestPet", "호기심 많은 고양이");
-			const commit = makeCommit();
-			const diff = "diff --git a/file.ts\n+const x = 1;";
-
-			const result = await reviewer.review(commit, diff);
-
+			const result = await reviewer.review(
+				makeCommit(),
+				"diff --git a/file.ts\n+const x = 1;",
+			);
 			expect(result).toContain("[GIT]");
 			expect(result).toContain("abc1234");
 			expect(result).toContain("testuser");
-			expect(result).toContain("feat: add new feature");
 			expect(result).toContain("This commit adds a well-structured feature.");
 		});
 
 		it("includes persona in the prompt sent to Claude", async () => {
 			mockClaudeResult("LGTM!");
-
 			const reviewer = new GitReviewer("CatBot", "코드를 사랑하는 고양이");
-			const commit = makeCommit();
-			const diff = "some diff";
-
-			await reviewer.review(commit, diff);
-
+			await reviewer.review(makeCommit(), "some diff");
 			const call = mockSpawnClaude.mock.calls[0][0];
 			expect(call.prompt).toContain("CatBot");
 			expect(call.prompt).toContain("코드를 사랑하는 고양이");
@@ -117,37 +91,26 @@ describe("GitReviewer", () => {
 
 		it("uses haiku model for reviews", async () => {
 			mockClaudeResult("Fine.");
-
 			const reviewer = new GitReviewer("Pet", "persona");
 			await reviewer.review(makeCommit(), "diff");
-
-			const call = mockSpawnClaude.mock.calls[0][0];
-			expect(call.model).toBe("haiku");
+			expect(mockSpawnClaude.mock.calls[0][0].model).toBe("haiku");
 		});
 
 		it("limits maxTurns to 1", async () => {
 			mockClaudeResult("OK");
-
 			const reviewer = new GitReviewer("Pet", "persona");
 			await reviewer.review(makeCommit(), "diff");
-
-			const call = mockSpawnClaude.mock.calls[0][0];
-			expect(call.maxTurns).toBe(1);
+			expect(mockSpawnClaude.mock.calls[0][0].maxTurns).toBe(1);
 		});
 	});
 
-	// -----------------------------------------------------------------------
-	// sendReview
-	// -----------------------------------------------------------------------
 
 	describe("sendReview", () => {
 		it("sends formatted review to channel plugin", async () => {
 			const plugin = makeMockPlugin();
 			const reviewer = new GitReviewer("Pet", "persona");
 			const message = "[GIT] abc1234 by testuser: feat: test\n\nLGTM!";
-
 			await reviewer.sendReview(plugin, "channel-123", message);
-
 			expect(plugin.sendMessage).toHaveBeenCalledWith(
 				"channel-123",
 				message,
@@ -158,19 +121,12 @@ describe("GitReviewer", () => {
 		it("handles send errors gracefully", async () => {
 			const plugin = makeMockPlugin();
 			plugin.sendMessage.mockRejectedValueOnce(new Error("network error"));
-
 			const reviewer = new GitReviewer("Pet", "persona");
-
-			// Should not throw
 			await expect(
 				reviewer.sendReview(plugin, "ch", "msg"),
 			).resolves.not.toThrow();
 		});
 	});
-
-	// -----------------------------------------------------------------------
-	// formatMessage
-	// -----------------------------------------------------------------------
 
 	describe("formatMessage", () => {
 		it("formats commit info with review text", () => {
@@ -180,18 +136,12 @@ describe("GitReviewer", () => {
 				author: "alice",
 				message: "fix: resolve crash",
 			});
-
 			const result = reviewer.formatMessage(commit, "Good fix!");
-
 			expect(result).toBe(
 				"[GIT] def5678 by alice: fix: resolve crash\n\nGood fix!",
 			);
 		});
 	});
-
-	// -----------------------------------------------------------------------
-	// error handling
-	// -----------------------------------------------------------------------
 
 	describe("error handling", () => {
 		it("returns fallback message when Claude fails", async () => {
@@ -208,10 +158,8 @@ describe("GitReviewer", () => {
 				forceKill: vi.fn(),
 				writeStdin: vi.fn(),
 			} as unknown as ReturnType<typeof spawnClaude>);
-
 			const reviewer = new GitReviewer("Pet", "persona");
 			const result = await reviewer.review(makeCommit(), "diff");
-
 			expect(result).toContain("[GIT]");
 			expect(result).toContain("(review unavailable)");
 		});

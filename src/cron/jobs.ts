@@ -369,6 +369,7 @@ async function runMemoryDecay(deps: CronJobDeps): Promise<void> {
 	logger.info("Memory decay completed", { archived });
 }
 
+
 // ---------------------------------------------------------------------------
 // Git watcher cron job
 // ---------------------------------------------------------------------------
@@ -405,9 +406,9 @@ async function runGitWatcher(deps: GitWatcherJobDeps): Promise<void> {
 	if (!watcher.isActive || plugins.length === 0) return;
 
 	const plugin = plugins[0];
-	const config = watcher.getState();
+	const state = watcher.getState();
 
-	for (const branch of Object.keys(config.lastCheckedSha)) {
+	for (const branch of Object.keys(state.lastCheckedSha)) {
 		if (watcher.isRateLimited()) {
 			logger.debug("Git watcher rate limited, skipping", { branch });
 			break;

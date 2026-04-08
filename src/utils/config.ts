@@ -41,6 +41,7 @@ const GrowthReportConfigSchema = z.object({
 	language: z.string().default("ko"),
 });
 
+
 const GitWatcherConfigSchema = z.object({
 	enabled: z.boolean().default(false),
 	branches: z.array(z.string()).default(["main"]),

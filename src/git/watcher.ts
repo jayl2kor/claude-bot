@@ -102,7 +102,7 @@ export class GitWatcher {
 		try {
 			logOutput = await git(this.workspacePath, [
 				"log",
-				`${lastSha}..HEAD`,
+				`${lastSha}..origin/${branch}`,
 				"--format=%H|%h|%an|%s|%at",
 				"--reverse",
 			]);
@@ -136,7 +136,8 @@ export class GitWatcher {
 			.split("\n")
 			.filter((line) => line.trim().length > 0)
 			.map((line): GitCommitInfo => {
-				const [sha, shortSha, author, message, timestampStr] = line.split("|");
+				const [sha, shortSha, author, message, timestampStr] =
+					line.split("|");
 				return {
 					sha: sha ?? "",
 					shortSha: shortSha ?? "",
@@ -185,18 +186,30 @@ export class GitWatcher {
 	/** Get the diff for a specific commit, truncated if necessary. */
 	async getDiff(sha: string): Promise<string> {
 		try {
-			const diff = await git(this.workspacePath, ["diff", `${sha}^..${sha}`]);
+			const isRootCommit = await git(this.workspacePath, [
+				"rev-parse",
+				"--verify",
+				`${sha}^`,
+			])
+				.then(() => false)
+				.catch(() => true);
+
+			const diff = isRootCommit
+				? await git(this.workspacePath, ["show", "--stat", sha])
+				: await git(this.workspacePath, ["diff", `${sha}^..${sha}`]);
 
 			if (diff.length <= this.config.maxDiffChars) {
 				return diff;
 			}
 
 			// Truncated diff: include stat summary
-			const stat = await git(this.workspacePath, [
-				"diff",
-				"--stat",
-				`${sha}^..${sha}`,
-			]);
+			const stat = isRootCommit
+				? diff
+				: await git(this.workspacePath, [
+						"diff",
+						"--stat",
+						`${sha}^..${sha}`,
+					]);
 			const truncated = diff.slice(0, this.config.maxDiffChars);
 			return `${truncated}\n\n[truncated]\n\n--- stat ---\n${stat}`;
 		} catch (err) {
