@@ -7,8 +7,8 @@
 
 import { randomUUID } from "node:crypto";
 import type { KnowledgeEntry } from "../memory/knowledge.js";
-import { KnowledgeManager } from "../memory/knowledge.js";
-import { RelationshipManager } from "../memory/relationships.js";
+import type { KnowledgeManager } from "../memory/knowledge.js";
+import type { RelationshipManager } from "../memory/relationships.js";
 import { logger } from "../utils/logger.js";
 import type { TeachingIntent } from "./detector.js";
 
@@ -27,7 +27,10 @@ export class KnowledgeExtractor {
 	/**
 	 * Process detected teaching intents and store as knowledge/preferences.
 	 */
-	async extract(intents: TeachingIntent[], userId: string): Promise<ExtractionResult> {
+	async extract(
+		intents: TeachingIntent[],
+		userId: string,
+	): Promise<ExtractionResult> {
 		let stored = 0;
 		let skipped = 0;
 		const entries: KnowledgeEntry[] = [];
@@ -89,7 +92,11 @@ export class KnowledgeExtractor {
 
 			await this.knowledge.upsert(entry);
 			entries.push(entry);
-			logger.info("Knowledge stored", { topic, id: entry.id, source: entry.source });
+			logger.info("Knowledge stored", {
+				topic,
+				id: entry.id,
+				source: entry.source,
+			});
 			stored++;
 		}
 

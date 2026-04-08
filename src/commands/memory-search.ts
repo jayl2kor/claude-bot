@@ -80,6 +80,9 @@ export async function handleMemorySearch(
 	const result = `🔍 **"${keyword}" 검색 결과**\n\n${sections.join("\n\n")}`;
 
 	// Truncate if too long for Discord
-	const truncated = result.length > 1900 ? `${result.slice(0, 1900)}...\n\n*(결과가 잘렸습니다)*` : result;
+	const truncated =
+		result.length > 1900
+			? `${result.slice(0, 1900)}...\n\n*(결과가 잘렸습니다)*`
+			: result;
 	await interaction.editReply(truncated);
 }

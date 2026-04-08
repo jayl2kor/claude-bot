@@ -19,7 +19,11 @@ function shouldLog(level: LogLevel): boolean {
 	return LEVEL_ORDER[level] >= LEVEL_ORDER[minLevel];
 }
 
-function formatEntry(level: LogLevel, message: string, context?: LogContext): string {
+function formatEntry(
+	level: LogLevel,
+	message: string,
+	context?: LogContext,
+): string {
 	const entry = {
 		timestamp: new Date().toISOString(),
 		level,
@@ -40,8 +44,12 @@ function log(level: LogLevel, message: string, context?: LogContext): void {
 }
 
 export const logger = {
-	debug: (message: string, context?: LogContext) => log("debug", message, context),
-	info: (message: string, context?: LogContext) => log("info", message, context),
-	warn: (message: string, context?: LogContext) => log("warn", message, context),
-	error: (message: string, context?: LogContext) => log("error", message, context),
+	debug: (message: string, context?: LogContext) =>
+		log("debug", message, context),
+	info: (message: string, context?: LogContext) =>
+		log("info", message, context),
+	warn: (message: string, context?: LogContext) =>
+		log("warn", message, context),
+	error: (message: string, context?: LogContext) =>
+		log("error", message, context),
 };

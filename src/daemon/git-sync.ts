@@ -16,7 +16,9 @@ function git(cwd: string, args: string[]): Promise<string> {
 	return new Promise((resolve, reject) => {
 		execFile("git", args, { cwd, timeout: 30_000 }, (err, stdout, stderr) => {
 			if (err) {
-				reject(new Error(`git ${args.join(" ")} failed: ${stderr || err.message}`));
+				reject(
+					new Error(`git ${args.join(" ")} failed: ${stderr || err.message}`),
+				);
 			} else {
 				resolve(stdout.trim());
 			}
@@ -41,7 +43,10 @@ export class GitSync {
 
 		const branch = this.config.branch!;
 		try {
-			const current = await git(this.workspacePath, ["branch", "--show-current"]);
+			const current = await git(this.workspacePath, [
+				"branch",
+				"--show-current",
+			]);
 			if (current !== branch) {
 				await git(this.workspacePath, ["checkout", branch]);
 				logger.info("Git: checked out branch", { branch });

@@ -3,7 +3,10 @@ import { mkdir, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 /** Atomic JSON write: write to temp file, then rename into place. */
-export async function atomicWriteJson(path: string, data: unknown): Promise<void> {
+export async function atomicWriteJson(
+	path: string,
+	data: unknown,
+): Promise<void> {
 	const tmp = `${path}.${randomUUID()}.tmp`;
 	await mkdir(dirname(path), { recursive: true });
 	await writeFile(tmp, JSON.stringify(data, null, 2), "utf8");

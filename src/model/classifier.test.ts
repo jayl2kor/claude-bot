@@ -2,8 +2,15 @@ import { describe, expect, it } from "vitest";
 import { classifyMessage, extractUserModelOverride } from "./classifier.js";
 import type { ClassificationContext } from "./types.js";
 
-function makeCtx(overrides: Partial<ClassificationContext> = {}): ClassificationContext {
-	return { userId: "user1", channelId: "chan1", timestamp: Date.now(), ...overrides };
+function makeCtx(
+	overrides: Partial<ClassificationContext> = {},
+): ClassificationContext {
+	return {
+		userId: "user1",
+		channelId: "chan1",
+		timestamp: Date.now(),
+		...overrides,
+	};
 }
 
 describe("extractUserModelOverride", () => {
@@ -57,16 +64,25 @@ describe("classifyMessage - greetings -> haiku", () => {
 
 describe("classifyMessage - complex keywords -> opus", () => {
 	it("classifies 'Docker 아키텍처 설계해줘' as opus", () => {
-		expect(classifyMessage("Docker 아키텍처 설계해줘", makeCtx()).tier).toBe("opus");
+		expect(classifyMessage("Docker 아키텍처 설계해줘", makeCtx()).tier).toBe(
+			"opus",
+		);
 	});
 	it("classifies messages with '설계' as opus", () => {
-		expect(classifyMessage("이 시스템을 설계하는 방법", makeCtx()).tier).toBe("opus");
+		expect(classifyMessage("이 시스템을 설계하는 방법", makeCtx()).tier).toBe(
+			"opus",
+		);
 	});
 	it("classifies messages with 'architecture' as opus", () => {
-		expect(classifyMessage("Explain the architecture of this system", makeCtx()).tier).toBe("opus");
+		expect(
+			classifyMessage("Explain the architecture of this system", makeCtx())
+				.tier,
+		).toBe("opus");
 	});
 	it("classifies messages with 'design pattern' as opus", () => {
-		expect(classifyMessage("Which design pattern should I use?", makeCtx()).tier).toBe("opus");
+		expect(
+			classifyMessage("Which design pattern should I use?", makeCtx()).tier,
+		).toBe("opus");
 	});
 });
 
@@ -77,16 +93,22 @@ describe("classifyMessage - code block + 500+ chars -> opus", () => {
 	});
 	it("classifies short code block as sonnet", () => {
 		const code = "```typescript\nconst x = 1;\n```";
-		expect(classifyMessage(`코드 봐줘\n${code}`, makeCtx()).tier).toBe("sonnet");
+		expect(classifyMessage(`코드 봐줘\n${code}`, makeCtx()).tier).toBe(
+			"sonnet",
+		);
 	});
 });
 
 describe("classifyMessage - technical -> sonnet", () => {
 	it("classifies '이 함수 뭐하는 거야?' as sonnet", () => {
-		expect(classifyMessage("이 함수 뭐하는 거야?", makeCtx()).tier).toBe("sonnet");
+		expect(classifyMessage("이 함수 뭐하는 거야?", makeCtx()).tier).toBe(
+			"sonnet",
+		);
 	});
 	it("classifies API questions as sonnet", () => {
-		expect(classifyMessage("REST API 엔드포인트 만들어줘", makeCtx()).tier).toBe("sonnet");
+		expect(
+			classifyMessage("REST API 엔드포인트 만들어줘", makeCtx()).tier,
+		).toBe("sonnet");
 	});
 });
 
@@ -107,34 +129,45 @@ describe("classifyMessage - user override", () => {
 describe("classifyMessage - session continuity", () => {
 	it("keeps previous model for low confidence + recent previous", () => {
 		const now = Date.now();
-		const r = classifyMessage("음", makeCtx({
-			previousModel: "opus",
-			previousTimestamp: now - 5 * 60 * 1000,
-		}));
+		const r = classifyMessage(
+			"음",
+			makeCtx({
+				previousModel: "opus",
+				previousTimestamp: now - 5 * 60 * 1000,
+			}),
+		);
 		expect(r.tier).toBe("opus");
 	});
 	it("does not keep previous if too old", () => {
 		const now = Date.now();
-		const r = classifyMessage("음", makeCtx({
-			previousModel: "opus",
-			previousTimestamp: now - 35 * 60 * 1000,
-			timestamp: now,
-		}));
+		const r = classifyMessage(
+			"음",
+			makeCtx({
+				previousModel: "opus",
+				previousTimestamp: now - 35 * 60 * 1000,
+				timestamp: now,
+			}),
+		);
 		expect(r.tier).not.toBe("opus");
 	});
 	it("does not keep previous if confidence is high", () => {
 		const now = Date.now();
-		const r = classifyMessage("안녕", makeCtx({
-			previousModel: "opus",
-			previousTimestamp: now - 5 * 60 * 1000,
-		}));
+		const r = classifyMessage(
+			"안녕",
+			makeCtx({
+				previousModel: "opus",
+				previousTimestamp: now - 5 * 60 * 1000,
+			}),
+		);
 		expect(r.tier).toBe("haiku");
 	});
 });
 
 describe("classifyMessage - default -> sonnet", () => {
 	it("classifies general messages as sonnet", () => {
-		expect(classifyMessage("오늘 날씨가 좋다고 하더라", makeCtx()).tier).toBe("sonnet");
+		expect(classifyMessage("오늘 날씨가 좋다고 하더라", makeCtx()).tier).toBe(
+			"sonnet",
+		);
 	});
 	it("returns valid result for empty string", () => {
 		const r = classifyMessage("", makeCtx());

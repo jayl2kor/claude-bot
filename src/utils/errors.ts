@@ -45,6 +45,8 @@ export function errorMessage(err: unknown): string {
 
 export function isENOENT(err: unknown): boolean {
 	return (
-		err instanceof Error && "code" in err && (err as NodeJS.ErrnoException).code === "ENOENT"
+		err instanceof Error &&
+		"code" in err &&
+		(err as NodeJS.ErrnoException).code === "ENOENT"
 	);
 }

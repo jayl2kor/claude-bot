@@ -6,9 +6,9 @@
  * queue to prevent concurrent modification of the same session.
  */
 
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { randomUUID } from "node:crypto";
 import { isENOENT } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 
