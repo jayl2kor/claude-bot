@@ -93,11 +93,13 @@ const CronReportConfigSchema = z.object({
 const PRReviewCronSchema = z.object({
 	enabled: z.boolean().default(false),
 	pollIntervalMs: z.number().default(5 * 60 * 1000),
+	channelId: z.string().default(""),
 });
 
 const PRResponseCronSchema = z.object({
 	enabled: z.boolean().default(false),
 	pollIntervalMs: z.number().default(5 * 60 * 1000),
+	channelId: z.string().default(""),
 });
 
 const EvaluationConfigSchema = z.object({
