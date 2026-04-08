@@ -58,6 +58,7 @@ export function createDiscordPlugin(
 	let commandHandler:
 		| ((interaction: CommandInteraction) => Promise<void>)
 		| null = null;
+	let interactionHandler: ((interaction: Interaction) => void) | null = null;
 
 	return {
 		id: "discord",
@@ -72,6 +73,42 @@ export function createDiscordPlugin(
 					resolve();
 				});
 			});
+
+			// Register the InteractionCreate listener once when connecting
+			interactionHandler = async (interaction: Interaction) => {
+				if (!interaction.isChatInputCommand() || !commandHandler) return;
+
+				const ci: CommandInteraction = {
+					commandName: interaction.commandName,
+					channelId: interaction.channelId,
+					userId: interaction.user.id,
+					userName: interaction.user.displayName ?? interaction.user.username,
+					options: Object.fromEntries(
+						interaction.options.data.map((o) => [
+							o.name,
+							o.value as string | number,
+						]),
+					),
+					reply: (content) =>
+						interaction.reply({ content, ephemeral: false }).then(() => {}),
+					deferReply: () => interaction.deferReply().then(() => {}),
+					editReply: (content) =>
+						interaction.editReply({ content }).then(() => {}),
+				};
+
+				try {
+					await commandHandler(ci);
+				} catch (err) {
+					logger.error("Slash command handler error", { error: String(err) });
+					if (!interaction.replied && !interaction.deferred) {
+						await interaction.reply({
+							content: "처리 중 에러가 발생했습니다.",
+							ephemeral: true,
+						});
+					}
+				}
+			};
+			client.on(Events.InteractionCreate, interactionHandler);
 
 			client.on(Events.MessageCreate, async (msg: DiscordMessage) => {
 				if (!messageHandler) return;
@@ -186,41 +223,6 @@ export function createDiscordPlugin(
 					error: String(err),
 				});
 			}
-
-			// Listen for interactions
-			client.on(Events.InteractionCreate, async (interaction: Interaction) => {
-				if (!interaction.isChatInputCommand() || !commandHandler) return;
-
-				const ci: CommandInteraction = {
-					commandName: interaction.commandName,
-					channelId: interaction.channelId,
-					userId: interaction.user.id,
-					userName: interaction.user.displayName ?? interaction.user.username,
-					options: Object.fromEntries(
-						interaction.options.data.map((o) => [
-							o.name,
-							o.value as string | number,
-						]),
-					),
-					reply: (content) =>
-						interaction.reply({ content, ephemeral: false }).then(() => {}),
-					deferReply: () => interaction.deferReply().then(() => {}),
-					editReply: (content) =>
-						interaction.editReply({ content }).then(() => {}),
-				};
-
-				try {
-					await commandHandler(ci);
-				} catch (err) {
-					logger.error("Slash command handler error", { error: String(err) });
-					if (!interaction.replied && !interaction.deferred) {
-						await interaction.reply({
-							content: "처리 중 에러가 발생했습니다.",
-							ephemeral: true,
-						});
-					}
-				}
-			});
 		},
 
 		onCommand(handler) {
@@ -257,6 +259,10 @@ export function createDiscordPlugin(
 		},
 
 		async disconnect() {
+			if (interactionHandler) {
+				client.off(Events.InteractionCreate, interactionHandler);
+				interactionHandler = null;
+			}
 			client.destroy();
 			logger.info("Discord disconnected");
 		},
