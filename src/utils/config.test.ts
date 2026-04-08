@@ -44,6 +44,8 @@ describe("AppConfigSchema", () => {
 		expect(result.persona.name).toBe("Claude-Pet");
 		expect(result.persona.tone).toBe("casual");
 		expect(result.daemon.maxConcurrentSessions).toBe(10);
+		expect(result.daemon.backend).toBe("claude");
+		expect(result.daemon.model).toBe("sonnet");
 		expect(result.daemon.claudeModel).toBe("sonnet");
 		expect(result.daemon.maxTurns).toBe(10);
 		expect(result.channels.discord).toBeUndefined();
@@ -99,10 +101,17 @@ describe("AppConfigSchema", () => {
 
 	it("accepts custom daemon values", () => {
 		const result = AppConfigSchema.parse({
-			daemon: { maxConcurrentSessions: 20, claudeModel: "opus", maxTurns: 5 },
+			daemon: {
+				maxConcurrentSessions: 20,
+				backend: "codex",
+				model: "o3",
+				maxTurns: 5,
+			},
 		});
 		expect(result.daemon.maxConcurrentSessions).toBe(20);
-		expect(result.daemon.claudeModel).toBe("opus");
+		expect(result.daemon.backend).toBe("codex");
+		expect(result.daemon.model).toBe("o3");
+		expect(result.daemon.claudeModel).toBe("o3");
 	});
 
 	it("applies smartModelSelection defaults (disabled, sonnet)", () => {
@@ -206,12 +215,14 @@ describe("loadConfig", () => {
 	it("loads daemon.yaml and applies custom values", async () => {
 		await writeFile(
 			join(configDir, "daemon.yaml"),
-			"maxConcurrentSessions: 3\nclaudeModel: haiku\nmaxTurns: 3\n",
+			"maxConcurrentSessions: 3\nbackend: codex\nmodel: o4-mini\nmaxTurns: 3\n",
 			"utf8",
 		);
 		const config = await loadConfig(configDir, envFile);
 		expect(config.daemon.maxConcurrentSessions).toBe(3);
-		expect(config.daemon.claudeModel).toBe("haiku");
+		expect(config.daemon.backend).toBe("codex");
+		expect(config.daemon.model).toBe("o4-mini");
+		expect(config.daemon.claudeModel).toBe("o4-mini");
 	});
 
 	it("loads channels.yaml with valid discord token", async () => {
@@ -259,14 +270,15 @@ describe("loadConfig", () => {
 	});
 
 	it("loads .env file and makes variables available for substitution", async () => {
-		await writeFile(envFile, "MY_TEST_MODEL=claude-opus\n", "utf8");
+		await writeFile(envFile, "MY_TEST_MODEL=o3\n", "utf8");
 		await writeFile(
 			join(configDir, "daemon.yaml"),
-			"claudeModel: ${MY_TEST_MODEL}\n",
+			"model: ${MY_TEST_MODEL}\n",
 			"utf8",
 		);
 		const config = await loadConfig(configDir, envFile);
-		expect(config.daemon.claudeModel).toBe("claude-opus");
+		expect(config.daemon.model).toBe("o3");
+		expect(config.daemon.claudeModel).toBe("o3");
 	});
 
 	it("does not override existing env vars with .env file values", async () => {
@@ -297,16 +309,27 @@ describe("loadConfig", () => {
 	it("strips surrounding quotes from .env values", async () => {
 		await writeFile(
 			envFile,
-			"QUOTED_MODEL=\"claude-sonnet\"\nSINGLE_MODEL='haiku'\n",
+			'QUOTED_MODEL="o4-mini"\nSINGLE_MODEL=\'o3\'\n',
 			"utf8",
 		);
 		await writeFile(
 			join(configDir, "daemon.yaml"),
-			"claudeModel: ${QUOTED_MODEL}\n",
+			"model: ${QUOTED_MODEL}\n",
 			"utf8",
 		);
 		const config = await loadConfig(configDir, envFile);
-		expect(config.daemon.claudeModel).toBe("claude-sonnet");
+		expect(config.daemon.model).toBe("o4-mini");
+		expect(config.daemon.claudeModel).toBe("o4-mini");
+	});
+
+	it("supports legacy claudeModel as fallback to model", () => {
+		const result = AppConfigSchema.parse({
+			daemon: {
+				claudeModel: "haiku",
+			},
+		});
+		expect(result.daemon.model).toBe("haiku");
+		expect(result.daemon.claudeModel).toBe("haiku");
 	});
 
 	it("handles .env file with lines without equals sign", async () => {

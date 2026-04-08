@@ -72,7 +72,7 @@ async function makeManager(
 	const manager = new SessionManager({
 		maxConcurrentSessions: 5,
 		sessionTimeoutMs: 60_000,
-		claudeModel: "claude-3",
+		model: "claude-3",
 		maxTurns: 5,
 		storeDir: tmpDir,
 		...overrides,

@@ -9,7 +9,7 @@
 import { buildAttachmentPrompt } from "../attachments/prompt.js";
 import { handleMemorySearch } from "../commands/memory-search.js";
 import type { ContextBuilder } from "../context/builder.js";
-import type { ResultMessage } from "../executor/types.js";
+import type { ExecutorResult } from "../executor/interface.js";
 import type { ActivityTracker } from "../memory/activity.js";
 import type { ChatHistoryManager } from "../memory/history.js";
 import type { KnowledgeManager } from "../memory/knowledge.js";
@@ -261,8 +261,8 @@ export class MessageRouter {
 
 		// Also capture final result for integration
 		let resultText = "";
-		handle.onResult((result: ResultMessage) => {
-			resultText = result.result;
+		handle.onResult((result: ExecutorResult) => {
+			resultText = result.text;
 		});
 
 		// Wait for process to fully complete

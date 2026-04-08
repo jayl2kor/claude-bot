@@ -21,6 +21,7 @@ import { CronService } from "../cron/service.js";
 import { DelegationBuilder } from "../expertise/defer.js";
 import { ExpertiseDocLoader } from "../expertise/loader.js";
 import { KnowledgeSeeder } from "../expertise/seeder.js";
+import { createExecutor } from "../executor/factory.js";
 import { EvaluationPublisher } from "../evaluation/publisher.js";
 import { EvaluationStore } from "../evaluation/store.js";
 import { PeerEvaluator } from "../evaluation/evaluator.js";
@@ -172,15 +173,16 @@ export async function runDaemon(
 		});
 
 		// 5. Initialize session manager
+		const executor = createExecutor(config.daemon.backend);
 		const sessionManager = new SessionManager({
 			maxConcurrentSessions: config.daemon.maxConcurrentSessions,
 			sessionTimeoutMs: config.daemon.sessionTimeoutMs,
-			claudeModel: config.daemon.claudeModel,
+			model: config.daemon.model,
 			maxTurns: config.daemon.maxTurns,
 			skipPermissions: config.daemon.skipPermissions,
 			storeDir: resolve(DATA_DIR, "sessions"),
 			workspacePath: config.daemon.workspacePath,
-		});
+		}, executor);
 
 		// 5b. Initialize status writer (optional)
 		const statusWriter = sharedStatusDir
@@ -343,8 +345,8 @@ export async function runDaemon(
 							resolve(DATA_DIR, "..", "shared", "tasks"),
 					),
 					skipPermissions: config.daemon.skipPermissions,
-					model: config.daemon.claudeModel,
-				})
+					model: config.daemon.model,
+				}, executor)
 			: undefined;
 
 		// 11. Initialize evaluation (optional)
@@ -404,7 +406,6 @@ export async function runDaemon(
 			expertiseConfig: config.expertise,
 			uploadDir,
 			attachmentRetentionDays: attachmentConfig.retentionDays,
-			expertiseConfig: config.expertise,
 		})) {
 			cronService.add(job);
 		}
@@ -488,41 +489,6 @@ export async function runDaemon(
 				});
 			}
 		}
-
-		// 11c. Growth report cron job (optional, disabled by default)
-		const growthReportConfig = config.daemon.growthReport;
-		if (growthReportConfig.enabled) {
-			const growthCollector = new GrowthCollector({
-				knowledge,
-				relationships,
-				reflections,
-				sessionStore,
-				activityTracker,
-				persona: personaManager,
-			});
-			const growthHistoryStore = new FileReportHistoryStore(
-				resolve(DATA_DIR, "memory", "growth-reports"),
-			);
-			const growthReporter = new GrowthReporter({
-				personaName: config.persona.name,
-				language: growthReportConfig.language,
-				historyStore: growthHistoryStore,
-			});
-			const growthJob = createGrowthReportJob({
-				growthReportConfig,
-				collector: growthCollector,
-				reporter: growthReporter,
-				plugins,
-			});
-			if (growthJob) {
-				cronService.add(growthJob);
-				logger.info("Growth report job registered", {
-					intervalMs: growthReportConfig.intervalMs,
-					channelId: growthReportConfig.channelId,
-				});
-			}
-		}
-
 
 		await cronService.start(signal);
 

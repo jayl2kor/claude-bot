@@ -97,7 +97,8 @@ discord:
 ```yaml
 maxConcurrentSessions: 10
 sessionTimeoutMs: 1800000   # 30 min
-claudeModel: sonnet
+backend: claude             # claude | codex
+model: sonnet
 maxTurns: 10
 skipPermissions: true       # Allow tool use without confirmation
 ```
@@ -270,7 +271,9 @@ constraints: string[]   # Behavioral constraints
 ```yaml
 maxConcurrentSessions: number   # Max parallel Claude processes (default: 10)
 sessionTimeoutMs: number        # Session timeout in ms (default: 1800000)
-claudeModel: string             # Claude model (default: sonnet)
+backend: claude|codex           # Executor backend (default: claude)
+model: string                   # Backend model name (default: sonnet)
+claudeModel: string             # Legacy alias; falls back to model
 maxTurns: number                # Max agentic turns per session (default: 10)
 skipPermissions: boolean        # Skip tool confirmation (default: false)
 workspacePath: string           # Working directory for Claude CLI

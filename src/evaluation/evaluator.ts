@@ -89,7 +89,7 @@ export class PeerEvaluator {
 			const handle = spawnClaude({ prompt, model: this.model, maxTurns: 1 });
 			let rawResult = "";
 			handle.onResult((r) => {
-				rawResult = r.result;
+				rawResult = r.text;
 			});
 			await handle.done;
 
