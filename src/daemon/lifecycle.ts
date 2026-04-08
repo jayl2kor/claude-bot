@@ -12,7 +12,11 @@ import { createTelegramPlugin } from "../channel/telegram/plugin.js";
 import { CollaborationManager } from "../collaboration/manager.js";
 import { ContextBuilder } from "../context/builder.js";
 import { createBuiltinJobs } from "../cron/jobs.js";
+import type { KnowledgeFeedDeps } from "../cron/jobs.js";
 import { CronService } from "../cron/service.js";
+import { FeedStore } from "../knowledge-feed/feed-store.js";
+import { FeedPublisher } from "../knowledge-feed/publisher.js";
+import { FeedSubscriber } from "../knowledge-feed/subscriber.js";
 import { ActivityTracker } from "../memory/activity.js";
 import { ChatHistoryManager } from "../memory/history.js";
 import { KnowledgeManager } from "../memory/knowledge.js";
@@ -167,11 +171,44 @@ export async function runDaemon(
 			logger.info("Channel connected", { channel: plugin.id });
 		}
 
-		// 8. Initialize teaching pipeline
+		// 8. Initialize knowledge feed (optional)
+		const feedConfig = config.daemon.knowledgeFeed;
+		let feedPublisher: FeedPublisher | undefined;
+		let knowledgeFeedDeps: KnowledgeFeedDeps | undefined;
+
+		if (feedConfig?.enabled) {
+			const feedSharedDir = resolve(
+				feedConfig.sharedDir ??
+					resolve(DATA_DIR, "..", "shared", "knowledge-feed"),
+			);
+			const feedStore = new FeedStore(feedSharedDir);
+			feedPublisher = new FeedPublisher(feedStore, config.persona.name);
+			const feedSubscriber = new FeedSubscriber({
+				feedStore,
+				knowledge,
+				petId: config.persona.name,
+				stateDir: resolve(DATA_DIR, "state"),
+				confidenceMultiplier: feedConfig.confidenceMultiplier,
+			});
+			knowledgeFeedDeps = {
+				feedStore,
+				feedSubscriber,
+				pollIntervalMs: feedConfig.pollIntervalMs,
+				ttlMs: feedConfig.ttlMs,
+			};
+			logger.info("Knowledge feed enabled", {
+				sharedDir: feedSharedDir,
+				pollIntervalMs: feedConfig.pollIntervalMs,
+				confidenceMultiplier: feedConfig.confidenceMultiplier,
+			});
+		}
+
+		// 8b. Initialize teaching pipeline
 		const integrator = new SessionIntegrator(
 			knowledge,
 			reflections,
 			relationships,
+			feedPublisher,
 		);
 
 		// 8b. Initialize smart model selection (optional)
@@ -231,6 +268,7 @@ export async function runDaemon(
 			activityTracker,
 			history,
 			collaboration,
+			knowledgeFeed: knowledgeFeedDeps,
 			plugins,
 		})) {
 			cronService.add(job);

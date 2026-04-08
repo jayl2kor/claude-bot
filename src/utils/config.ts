@@ -45,6 +45,14 @@ const CollaborationConfigSchema = z.object({
 	sharedDir: z.string().optional(),
 });
 
+const KnowledgeFeedConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	pollIntervalMs: z.number().default(30_000),
+	ttlMs: z.number().default(7 * 24 * 60 * 60 * 1000),
+	confidenceMultiplier: z.number().min(0).max(1).default(0.7),
+	sharedDir: z.string().optional(),
+});
+
 const DaemonConfigSchema = z.object({
 	maxConcurrentSessions: z.number().default(10),
 	sessionTimeoutMs: z.number().default(30 * 60 * 1000),
@@ -57,6 +65,7 @@ const DaemonConfigSchema = z.object({
 	git: GitConfigSchema.default({}),
 	collaboration: CollaborationConfigSchema.default({}),
 	smartModelSelection: SmartModelSelectionSchema.default({}),
+	knowledgeFeed: KnowledgeFeedConfigSchema.default({}),
 });
 
 export const AppConfigSchema = z.object({
