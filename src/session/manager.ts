@@ -2,22 +2,28 @@
  * Session lifecycle manager.
  * Reference: Claude-code bridge/bridgeMain.ts activeSessions Map + onSessionDone
  *
- * Manages concurrent Claude CLI sessions per user+channel,
+ * Manages concurrent LLM executor sessions per user+channel,
  * with timeout, cleanup, and graceful shutdown.
  */
 
 import {
-	type SessionHandle,
-	type SpawnOptions,
 	spawnClaude,
 } from "../executor/spawner.js";
+import type {
+	ExecutorFactory,
+	ExecutorHandle,
+	ExecutorSpawnOptions,
+} from "../executor/interface.js";
 import { logger } from "../utils/logger.js";
 import { type SessionRecord, SessionStore } from "./store.js";
 
 export type SessionManagerConfig = {
 	maxConcurrentSessions: number;
 	sessionTimeoutMs: number;
-	claudeModel: string;
+	/** Preferred model name (backend-agnostic). */
+	model?: string;
+	/** Legacy compatibility field. */
+	claudeModel?: string;
 	maxTurns: number;
 	skipPermissions: boolean;
 	storeDir: string;
@@ -31,7 +37,7 @@ export type OnSessionDoneCallback = (
 ) => void;
 
 export class SessionManager {
-	private readonly activeSessions = new Map<string, SessionHandle>();
+	private readonly activeSessions = new Map<string, ExecutorHandle>();
 	private readonly sessionTimers = new Map<
 		string,
 		ReturnType<typeof setTimeout>
@@ -40,7 +46,10 @@ export class SessionManager {
 	private onTextCallback: OnSessionTextCallback | null = null;
 	private onDoneCallback: OnSessionDoneCallback | null = null;
 
-	constructor(private readonly config: SessionManagerConfig) {
+	constructor(
+		private readonly config: SessionManagerConfig,
+		private readonly spawn: ExecutorFactory = spawnClaude,
+	) {
 		this.store = new SessionStore(config.storeDir);
 	}
 
@@ -69,7 +78,7 @@ export class SessionManager {
 	}
 
 	/**
-	 * Spawn a new claude session for every message.
+	 * Spawn a new session for every message.
 	 * Returns null only when at global capacity.
 	 */
 	async getOrCreate(
@@ -78,7 +87,7 @@ export class SessionManager {
 		prompt: string,
 		systemPrompt?: string,
 		model?: string,
-	): Promise<SessionHandle | null> {
+	): Promise<ExecutorHandle | null> {
 		const key = SessionManager.sessionKey(userId, channelId);
 
 		// Capacity check — global across all users
@@ -91,16 +100,16 @@ export class SessionManager {
 		}
 
 		const record = await this.store.read(key);
-		const spawnOpts: SpawnOptions = {
+		const spawnOpts: ExecutorSpawnOptions = {
 			prompt,
 			systemPrompt,
-			model: model ?? this.config.claudeModel,
+			model: model ?? this.resolveModel(),
 			maxTurns: this.config.maxTurns,
 			cwd: this.config.workspacePath,
 			skipPermissions: this.config.skipPermissions,
 		};
 
-		const handle = spawnClaude(spawnOpts);
+		const handle = this.spawn(spawnOpts);
 
 		// Use unique session key per spawn to allow concurrent sessions per user
 		const sessionKey = `${key}:${Date.now()}`;
@@ -210,12 +219,13 @@ export class SessionManager {
 		const baseKey = parts.length >= 3 ? `${parts[0]}:${parts[1]}` : sessionKey;
 
 		// Persist claude session ID for future reference
-		if (handle?.claudeSessionId) {
+		const resolvedSessionId = handle?.sessionId ?? handle?.claudeSessionId;
+		if (resolvedSessionId) {
 			void this.store.read(baseKey).then((record) => {
 				if (record) {
 					void this.store.write(baseKey, {
 						...record,
-						claudeSessionId: handle.claudeSessionId,
+						claudeSessionId: resolvedSessionId,
 						lastActivityAt: Date.now(),
 					});
 				}
@@ -259,5 +269,9 @@ export class SessionManager {
 			clearTimeout(timer);
 			this.sessionTimers.delete(key);
 		}
+	}
+
+	private resolveModel(): string {
+		return this.config.model ?? this.config.claudeModel ?? "sonnet";
 	}
 }

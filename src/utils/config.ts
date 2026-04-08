@@ -35,10 +35,6 @@ const GitConfigSchema = z.object({
 	autoSync: z.boolean().default(false),
 });
 
-const GrowthReportConfigSchema = z.object({
-	enabled: z.boolean().default(false),
-	intervalMs: z.number().default(7 * 24 * 60 * 60 * 1000), // weekly
-
 const AttachmentConfigSchema = z.object({
 	maxFileSizeMb: z.number().default(10),
 	maxTotalSizeMb: z.number().default(25),
@@ -96,25 +92,37 @@ const EvaluationConfigSchema = z.object({
 	maxPendingCount: z.number().default(5),
 });
 
-const DaemonConfigSchema = z.object({
-	maxConcurrentSessions: z.number().default(10),
-	sessionTimeoutMs: z.number().default(30 * 60 * 1000),
-	pointerRefreshMs: z.number().default(5 * 60 * 1000),
-	claudeModel: z.string().default("sonnet"),
-	maxTurns: z.number().default(10),
-	skipPermissions: z.boolean().default(false),
-	workspacePath: z.string().optional(),
-	sharedStatusDir: z.string().optional(),
-	git: GitConfigSchema.default({}),
-	gitWatcher: GitWatcherConfigSchema.default({}),
-	collaboration: CollaborationConfigSchema.default({}),
-	growthReport: GrowthReportConfigSchema.default({}),
-	smartModelSelection: SmartModelSelectionSchema.default({}),
-	attachments: AttachmentConfigSchema.default({}),
-	knowledgeFeed: KnowledgeFeedConfigSchema.default({}),
-	study: StudyConfigSchema.default({}),
-	evaluation: EvaluationConfigSchema.default({}),
-});
+const DaemonConfigSchema = z
+	.object({
+		maxConcurrentSessions: z.number().default(10),
+		sessionTimeoutMs: z.number().default(30 * 60 * 1000),
+		pointerRefreshMs: z.number().default(5 * 60 * 1000),
+		backend: z.enum(["claude", "codex"]).default("claude"),
+		model: z.string().optional(),
+		/** Legacy compatibility field. Prefer `model`. */
+		claudeModel: z.string().optional(),
+		maxTurns: z.number().default(10),
+		skipPermissions: z.boolean().default(false),
+		workspacePath: z.string().optional(),
+		sharedStatusDir: z.string().optional(),
+		git: GitConfigSchema.default({}),
+		gitWatcher: GitWatcherConfigSchema.default({}),
+		collaboration: CollaborationConfigSchema.default({}),
+		growthReport: GrowthReportConfigSchema.default({}),
+		smartModelSelection: SmartModelSelectionSchema.default({}),
+		attachments: AttachmentConfigSchema.default({}),
+		knowledgeFeed: KnowledgeFeedConfigSchema.default({}),
+		study: StudyConfigSchema.default({}),
+		evaluation: EvaluationConfigSchema.default({}),
+	})
+	.transform((daemon) => {
+		const resolvedModel = daemon.model ?? daemon.claudeModel ?? "sonnet";
+		return {
+			...daemon,
+			model: resolvedModel,
+			claudeModel: daemon.claudeModel ?? resolvedModel,
+		};
+	});
 
 export const AppConfigSchema = z.object({
 	persona: PersonaConfigSchema.default({}),

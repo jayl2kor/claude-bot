@@ -1,5 +1,6 @@
 maxConcurrentSessions: 10
 sessionTimeoutMs: 1800000
 pointerRefreshMs: 300000
-claudeModel: sonnet
+backend: claude
+model: sonnet
 skipPermissions: true

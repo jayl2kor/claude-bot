@@ -21,6 +21,7 @@ import { CronService } from "../cron/service.js";
 import { DelegationBuilder } from "../expertise/defer.js";
 import { ExpertiseDocLoader } from "../expertise/loader.js";
 import { KnowledgeSeeder } from "../expertise/seeder.js";
+import { createExecutor } from "../executor/factory.js";
 import { EvaluationPublisher } from "../evaluation/publisher.js";
 import { EvaluationStore } from "../evaluation/store.js";
 import { PeerEvaluator } from "../evaluation/evaluator.js";
@@ -172,15 +173,17 @@ export async function runDaemon(
 		});
 
 		// 5. Initialize session manager
+		const executor = createExecutor(config.daemon.backend);
 		const sessionManager = new SessionManager({
 			maxConcurrentSessions: config.daemon.maxConcurrentSessions,
 			sessionTimeoutMs: config.daemon.sessionTimeoutMs,
+			model: config.daemon.model,
 			claudeModel: config.daemon.claudeModel,
 			maxTurns: config.daemon.maxTurns,
 			skipPermissions: config.daemon.skipPermissions,
 			storeDir: resolve(DATA_DIR, "sessions"),
 			workspacePath: config.daemon.workspacePath,
-		});
+		}, executor);
 
 		// 5b. Initialize status writer (optional)
 		const statusWriter = sharedStatusDir
@@ -343,8 +346,8 @@ export async function runDaemon(
 							resolve(DATA_DIR, "..", "shared", "tasks"),
 					),
 					skipPermissions: config.daemon.skipPermissions,
-					model: config.daemon.claudeModel,
-				})
+					model: config.daemon.model,
+				}, executor)
 			: undefined;
 
 		// 11. Initialize evaluation (optional)

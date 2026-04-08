@@ -3,6 +3,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import type { ExecutorFactory } from "../executor/interface.js";
 import { spawnClaude } from "../executor/spawner.js";
 import type { ChannelPlugin } from "../plugins/types.js";
 import { logger } from "../utils/logger.js";
@@ -24,7 +25,10 @@ export type CollabManagerConfig = {
 export class CollaborationManager {
 	readonly store: TaskStore;
 
-	constructor(private readonly config: CollabManagerConfig) {
+	constructor(
+		private readonly config: CollabManagerConfig,
+		private readonly spawn: ExecutorFactory = spawnClaude,
+	) {
 		this.store = new TaskStore(config.sharedDir);
 	}
 
@@ -147,7 +151,7 @@ export class CollaborationManager {
 		].join("\n");
 
 		try {
-			const handle = spawnClaude({
+			const handle = this.spawn({
 				prompt,
 				model: this.config.model,
 				maxTurns: 5,
@@ -156,7 +160,7 @@ export class CollaborationManager {
 
 			let result = "";
 			handle.onResult((r) => {
-				result = r.result;
+				result = r.text;
 			});
 			await handle.done;
 
@@ -223,20 +227,21 @@ export class CollaborationManager {
 			.join("\n\n---\n\n");
 
 		// Use Claude to merge
-		const handle = spawnClaude({
+		const handle = this.spawn({
 			prompt: [
 				"아래는 여러 팀원의 작업 결과입니다. 하나의 통합된 응답으로 합쳐주세요.",
 				`원본 요청: ${task.prompt}`,
 				"",
 				parts,
 			].join("\n"),
-			model: "haiku",
+			model: this.config.model,
 			maxTurns: 1,
+			skipPermissions: this.config.skipPermissions,
 		});
 
 		let merged = "";
 		handle.onResult((r) => {
-			merged = r.result;
+			merged = r.text;
 		});
 		await handle.done;
 
