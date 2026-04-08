@@ -41,6 +41,30 @@ services:
       - ${CLAUDE_AUTH_PATH:-${HOME}/.claude}:/root/.claude
     command: ["--pet", "reboong"]
 
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    environment:
+      DASHBOARD_PORT: "3000"
+      SHARED_STATUS_DIR: /app/data/shared/status
+      PET_DATA_DIRS: /app/data/coboonge,/app/data/reboong
+      PET_CONFIG_DIRS: /app/config/coboonge,/app/config/reboong
+    volumes:
+      - coboonge-data:/app/data/coboonge:ro
+      - reboong-data:/app/data/reboong:ro
+      - shared-status:/app/data/shared/status:ro
+      - ./config/coboonge:/app/config/coboonge:ro
+      - ./config/reboong:/app/config/reboong:ro
+    ports:
+      - "${DASHBOARD_PORT:-3000}:3000"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.5"
+
 volumes:
   coboonge-data:
   coboonge-workspace:
