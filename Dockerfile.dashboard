@@ -3,10 +3,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --ignore-scripts
 COPY tsconfig.json ./
-COPY src/dashboard/ src/dashboard/
-COPY src/memory/ src/memory/
-COPY src/status/ src/status/
-COPY src/utils/ src/utils/
+COPY src/ src/
 RUN npx tsc --outDir dist
 
 FROM node:24-bookworm-slim
