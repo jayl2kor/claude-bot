@@ -11,11 +11,13 @@ import { MessageRouter } from "../channel/router.js";
 import { createTelegramPlugin } from "../channel/telegram/plugin.js";
 import { CollaborationManager } from "../collaboration/manager.js";
 import { ContextBuilder } from "../context/builder.js";
-import { createBuiltinJobs } from "../cron/jobs.js";
+import { createBuiltinJobs, createGitWatcherJob } from "../cron/jobs.js";
 import { CronService } from "../cron/service.js";
 import { EvaluationPublisher } from "../evaluation/publisher.js";
 import { EvaluationStore } from "../evaluation/store.js";
 import { PeerEvaluator } from "../evaluation/evaluator.js";
+import { GitReviewer } from "../git/reviewer.js";
+import { GitWatcher } from "../git/watcher.js";
 import { ActivityTracker } from "../memory/activity.js";
 import { ChatHistoryManager } from "../memory/history.js";
 import { KnowledgeManager } from "../memory/knowledge.js";
@@ -179,10 +181,13 @@ export async function runDaemon(
 
 		// 8b. Initialize smart model selection (optional)
 		const smsConfig = config.daemon.smartModelSelection;
+		const modelStatsTracker = new ModelStatsTracker(
+			resolve(DATA_DIR, "model-stats"),
+		);
 		const smartModelSelection = smsConfig.enabled
 			? {
 					enabled: true as const,
-					statsTracker: new ModelStatsTracker(resolve(DATA_DIR, "model-stats")),
+					statsTracker: modelStatsTracker,
 					defaultModel: smsConfig.defaultModel,
 				}
 			: undefined;
@@ -287,9 +292,46 @@ export async function runDaemon(
 				handler: () => statusWriter.write(),
 			});
 		}
+		// 11b. Git watcher cron job (optional, disabled by default)
+		const gitWatcherConfig = config.daemon.gitWatcher;
+		if (gitWatcherConfig.enabled && config.daemon.workspacePath) {
+			if (!gitWatcherConfig.reviewChannelId) {
+				logger.warn(
+					"GitWatcher: reviewChannelId is empty — reviews will not be delivered. Set daemon.gitWatcher.reviewChannelId in your config.",
+				);
+			}
+
+			const gitWatcher = new GitWatcher(
+				config.daemon.workspacePath,
+				gitWatcherConfig,
+				resolve(DATA_DIR, "state"),
+			);
+			await gitWatcher.init();
+
+			const gitReviewer = new GitReviewer(
+				config.persona.name,
+				config.persona.personality,
+			);
+
+			const gitWatcherJob = createGitWatcherJob({
+				watcher: gitWatcher,
+				reviewer: gitReviewer,
+				plugins,
+				reviewChannelId: gitWatcherConfig.reviewChannelId,
+				pollIntervalMs: gitWatcherConfig.pollIntervalMs,
+			});
+			if (gitWatcherJob) {
+				cronService.add(gitWatcherJob);
+				logger.info("Git watcher job registered", {
+					branches: gitWatcherConfig.branches,
+					pollIntervalMs: gitWatcherConfig.pollIntervalMs,
+				});
+			}
+		}
+
 		await cronService.start(signal);
 
-		// 11. Write initial pointer
+		// 12. Write initial pointer
 		const writePointerState = async () => {
 			const p: DaemonPointer = {
 				activeSessions: sessionManager.getActiveSessionKeys().map((key) => {
