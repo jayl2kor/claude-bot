@@ -39,7 +39,13 @@ export async function handleMemorySearch(
 					: entry.source === "corrected"
 						? "수정됨"
 						: "추론";
-			sections.push(`> **${entry.topic}** (${source})\n> ${entry.content}`);
+			const strengthPct = Math.round(entry.strength * 100);
+			const filled = Math.round(entry.strength * 6);
+			const empty = 6 - filled;
+			const bar = `${"█".repeat(filled)}${"░".repeat(empty)}`;
+			sections.push(
+				`> **${entry.topic}** (${source}) [강도: ${bar} ${strengthPct}%]\n> ${entry.content}`,
+			);
 		}
 	}
 
@@ -80,6 +86,9 @@ export async function handleMemorySearch(
 	const result = `🔍 **"${keyword}" 검색 결과**\n\n${sections.join("\n\n")}`;
 
 	// Truncate if too long for Discord
-	const truncated = result.length > 1900 ? `${result.slice(0, 1900)}...\n\n*(결과가 잘렸습니다)*` : result;
+	const truncated =
+		result.length > 1900
+			? `${result.slice(0, 1900)}...\n\n*(결과가 잘렸습니다)*`
+			: result;
 	await interaction.editReply(truncated);
 }
