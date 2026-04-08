@@ -190,6 +190,7 @@ export class MessageRouter {
 			msg.channelId,
 			msg.content,
 			msg.recentMessages,
+			{ isFromBot: msg.isFromBot },
 		);
 
 		// Smart model selection (when enabled)

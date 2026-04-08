@@ -55,6 +55,7 @@ export class ContextBuilder {
 		channelId: string,
 		recentQuery?: string,
 		recentMessages?: ChannelChatMessage[],
+		options?: { isFromBot?: boolean },
 	): Promise<string> {
 		// Parallel I/O — all sections are independent
 		const historyPromise =
@@ -131,8 +132,22 @@ export class ContextBuilder {
 		}
 
 		// Delegation awareness (400 token budget, managed by builder)
-		if (delegationSection) {
+		// Skip delegation section when message is from another bot (anti-loop)
+		if (delegationSection && !options?.isFromBot) {
 			sections.push(delegationSection);
+		}
+
+		// Anti-loop: when message is from another bot, prevent re-delegation
+		if (options?.isFromBot) {
+			sections.push(
+				[
+					"# 업무 지시 수신",
+					"이 메시지는 다른 붕이가 보낸 업무 지시입니다.",
+					"- 요청받은 작업을 직접 처리하세요",
+					"- 다른 붕이에게 재위임하지 마세요 (무한 루프 방지)",
+					"- 결과를 이 채널에 바로 답변하세요",
+				].join("\n"),
+			);
 		}
 
 		if (relSection) {

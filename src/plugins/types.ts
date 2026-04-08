@@ -20,6 +20,8 @@ export type IncomingMessage = {
 	content: string;
 	timestamp: number;
 	replyTo?: string;
+	/** True when the message was sent by another bot (not a human). */
+	isFromBot?: boolean;
 	/** Recent channel messages for conversation context. */
 	recentMessages?: ChannelChatMessage[];
 	/** Attached files (images, documents, code). */

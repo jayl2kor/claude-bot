@@ -23,12 +23,20 @@ export class DelegationBuilder {
 
 		const onlineNames = await this.getOnlineNames();
 
-		const lines = ["# 전문 분야 및 위임", ""];
+		const lines = [
+			"# 전문 분야 및 위임",
+			"",
+			"업무를 위임하려면 디스코드에서 해당 붕이를 `<@ID>` 형식으로 멘션하면서 지시하면 됩니다.",
+			"(멘션 ID는 공통 규칙의 '디스코드 멘션 방법' 참고)",
+			"",
+		];
 
 		for (const [domain, petName] of entries) {
 			const isOnline = onlineNames.has(petName);
 			if (isOnline) {
-				lines.push(`- **${domain}**: ${petName}에게 위임 가능 (온라인)`);
+				lines.push(
+					`- **${domain}**: ${petName}에게 위임 가능 (온라인) — 디스코드 멘션으로 업무 지시`,
+				);
 			} else {
 				lines.push(`- **${domain}**: ${petName} 오프라인 — 직접 도와줘`);
 			}

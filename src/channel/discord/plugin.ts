@@ -132,6 +132,7 @@ export function createDiscordPlugin(
 					content: content || "(첨부 파일만 전송됨)",
 					timestamp: msg.createdTimestamp,
 					replyTo: msg.reference?.messageId ?? undefined,
+					isFromBot: msg.author.bot,
 					recentMessages,
 					...(attachments.length > 0 ? { attachments } : {}),
 				};
