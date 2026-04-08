@@ -204,12 +204,16 @@ export async function runDaemon(
 		);
 
 		// 8b. Initialize smart model selection (optional)
+		// ModelStatsTracker is only instantiated when smartModelSelection is enabled
+		// to avoid creating unnecessary directories when the feature is disabled.
 		const smsConfig = config.daemon.smartModelSelection;
-		const modelStatsTracker = new ModelStatsTracker(
-			resolve(DATA_DIR, "model-stats"),
-		);
 		const smartModelSelection = smsConfig.enabled
-			? { enabled: true as const, statsTracker: modelStatsTracker }
+			? {
+					enabled: true as const,
+					statsTracker: new ModelStatsTracker(
+						resolve(DATA_DIR, "model-stats"),
+					),
+				}
 			: undefined;
 
 		if (smsConfig.enabled) {

@@ -6,31 +6,9 @@
  */
 
 import type { StatusReader } from "../status/reader.js";
+import { truncateToTokenBudget } from "../utils/tokens.js";
 
 const DEFAULT_TOKEN_BUDGET = 400;
-
-/** Rough token estimate: ~4 chars per token for English, ~2 for Korean. */
-function estimateTokens(text: string): number {
-	const koreanChars = (text.match(/[\uAC00-\uD7AF]/g) ?? []).length;
-	const otherChars = text.length - koreanChars;
-	return Math.ceil(koreanChars / 2 + otherChars / 4);
-}
-
-function truncateToTokenBudget(text: string, budget: number): string {
-	if (estimateTokens(text) <= budget) return text;
-
-	let lo = 0;
-	let hi = text.length;
-	while (lo < hi) {
-		const mid = Math.ceil((lo + hi) / 2);
-		if (estimateTokens(text.slice(0, mid)) <= budget) {
-			lo = mid;
-		} else {
-			hi = mid - 1;
-		}
-	}
-	return `${text.slice(0, lo)}...`;
-}
 
 export class DelegationBuilder {
 	constructor(

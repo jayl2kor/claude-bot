@@ -12,7 +12,11 @@ import { dirname, join } from "node:path";
 import type { KnowledgeManager } from "../memory/knowledge.js";
 import { isENOENT } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
-import { SeedKnowledgeEntrySchema, SeedStateSchema } from "./types.js";
+import {
+	SeedKnowledgeEntrySchema,
+	SeedStateSchema,
+	type SeedKnowledgeEntry,
+} from "./types.js";
 
 export class KnowledgeSeeder {
 	private readonly seedDir: string;
@@ -70,26 +74,14 @@ export class KnowledgeSeeder {
 		return createHash("sha256").update(`${topic}::${content}`).digest("hex");
 	}
 
-	private async loadSeedEntries(): Promise<
-		Array<{
-			topic: string;
-			content: string;
-			tags: string[];
-			confidence: number;
-		}>
-	> {
+	private async loadSeedEntries(): Promise<SeedKnowledgeEntry[]> {
 		try {
 			const files = await readdir(this.seedDir);
 			const jsonFiles = files.filter((f) => f.endsWith(".json")).sort();
 
 			if (jsonFiles.length === 0) return [];
 
-			const entries: Array<{
-				topic: string;
-				content: string;
-				tags: string[];
-				confidence: number;
-			}> = [];
+			const entries: SeedKnowledgeEntry[] = [];
 
 			for (const file of jsonFiles) {
 				try {
@@ -104,14 +96,18 @@ export class KnowledgeSeeder {
 							entries.push(result.data);
 						}
 					}
-				} catch {
-					// Skip unreadable/invalid files
+				} catch (err) {
+					logger.warn("Failed to read seed file", {
+						file,
+						error: String(err),
+					});
 				}
 			}
 
 			return entries;
 		} catch (err) {
 			if (isENOENT(err)) return [];
+			logger.error("Failed to read seed directory", { error: String(err) });
 			return [];
 		}
 	}

@@ -83,6 +83,16 @@ function makeDeps(overrides: Partial<MessageRouterDeps> = {}): MessageRouterDeps
 		knowledge: {
 			toPromptSection: vi.fn().mockResolvedValue(""),
 		} as unknown as MessageRouterDeps["knowledge"],
+		activityTracker: {
+			recordActivity: vi.fn().mockResolvedValue(undefined),
+		} as unknown as MessageRouterDeps["activityTracker"],
+		history: {
+			append: vi.fn().mockResolvedValue(undefined),
+			search: vi.fn().mockResolvedValue([]),
+		} as unknown as MessageRouterDeps["history"],
+		reflections: {
+			toPromptSection: vi.fn().mockResolvedValue(""),
+		} as unknown as MessageRouterDeps["reflections"],
 		integrator: {
 			integrate: vi.fn().mockResolvedValue(undefined),
 		} as unknown as MessageRouterDeps["integrator"],
@@ -371,7 +381,7 @@ describe("MessageRouter smart model selection", () => {
 		await capturedHandler(makeIncomingMessage({ content: "hello" }));
 		const mock = vi.mocked(deps.sessionManager.getOrCreate);
 		expect(mock).toHaveBeenCalledOnce();
-		expect(mock.mock.calls[0]?.[5]).toBeUndefined();
+		expect(mock.mock.calls[0]?.[4]).toBeUndefined();
 	});
 
 	it("selects opus for complexity keywords", async () => {
@@ -391,7 +401,7 @@ describe("MessageRouter smart model selection", () => {
 		router.start();
 		await capturedHandler(makeIncomingMessage({ content: "\uc774 \uc2dc\uc2a4\ud15c \uc544\ud0a4\ud14d\ucc98\ub97c \uc124\uacc4\ud574\uc918" }));
 		const mock = vi.mocked(deps.sessionManager.getOrCreate);
-		expect(mock.mock.calls[0]?.[5]).toBe("opus");
+		expect(mock.mock.calls[0]?.[4]).toBe("opus");
 		expect(mockStats.record).toHaveBeenCalledWith("opus", false);
 	});
 
@@ -412,7 +422,7 @@ describe("MessageRouter smart model selection", () => {
 		router.start();
 		await capturedHandler(makeIncomingMessage({ content: "\uc548\ub155" }));
 		const mock = vi.mocked(deps.sessionManager.getOrCreate);
-		expect(mock.mock.calls[0]?.[5]).toBe("haiku");
+		expect(mock.mock.calls[0]?.[4]).toBe("haiku");
 		expect(mockStats.record).toHaveBeenCalledWith("haiku", false);
 	});
 });

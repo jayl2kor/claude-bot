@@ -8,32 +8,10 @@
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { isENOENT } from "../utils/errors.js";
+import { logger } from "../utils/logger.js";
+import { truncateToTokenBudget } from "../utils/tokens.js";
 
 const DEFAULT_TOKEN_BUDGET = 2500;
-
-/** Rough token estimate: ~4 chars per token for English, ~2 for Korean. */
-function estimateTokens(text: string): number {
-	const koreanChars = (text.match(/[\uAC00-\uD7AF]/g) ?? []).length;
-	const otherChars = text.length - koreanChars;
-	return Math.ceil(koreanChars / 2 + otherChars / 4);
-}
-
-/** Truncate text to fit within a token budget. */
-function truncateToTokenBudget(text: string, budget: number): string {
-	if (estimateTokens(text) <= budget) return text;
-
-	let lo = 0;
-	let hi = text.length;
-	while (lo < hi) {
-		const mid = Math.ceil((lo + hi) / 2);
-		if (estimateTokens(text.slice(0, mid)) <= budget) {
-			lo = mid;
-		} else {
-			hi = mid - 1;
-		}
-	}
-	return `${text.slice(0, lo)}...`;
-}
 
 export class ExpertiseDocLoader {
 	private readonly dir: string;
@@ -68,13 +46,17 @@ export class ExpertiseDocLoader {
 					if (content.trim()) {
 						docs.push(content.trim());
 					}
-				} catch {
-					// Skip unreadable files
+				} catch (err) {
+					logger.warn("Failed to read expertise file", {
+						file,
+						error: String(err),
+					});
 				}
 			}
 			return docs;
 		} catch (err) {
 			if (isENOENT(err)) return [];
+			logger.error("Failed to read expertise directory", { error: String(err) });
 			return [];
 		}
 	}
