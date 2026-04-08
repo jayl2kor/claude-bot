@@ -95,6 +95,7 @@ export function createTelegramPlugin(
 				});
 
 				for (const update of updates) {
+					if (signal.aborted) break;
 					offset = update.update_id + 1;
 
 					const msg = update.message;
