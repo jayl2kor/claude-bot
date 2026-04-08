@@ -66,7 +66,10 @@ describe("ModelStatsTracker - session cache", () => {
 		const tracker = new ModelStatsTracker(testDir);
 		const now = Date.now();
 		tracker.setSessionModel("u1:c1", "opus", now);
-		expect(tracker.getSessionModel("u1:c1")).toEqual({ model: "opus", timestamp: now });
+		expect(tracker.getSessionModel("u1:c1")).toEqual({
+			model: "opus",
+			timestamp: now,
+		});
 	});
 
 	it("overwrites model", () => {
@@ -74,7 +77,10 @@ describe("ModelStatsTracker - session cache", () => {
 		const now = Date.now();
 		tracker.setSessionModel("u1:c1", "opus", now);
 		tracker.setSessionModel("u1:c1", "haiku", now + 1000);
-		expect(tracker.getSessionModel("u1:c1")).toEqual({ model: "haiku", timestamp: now + 1000 });
+		expect(tracker.getSessionModel("u1:c1")).toEqual({
+			model: "haiku",
+			timestamp: now + 1000,
+		});
 	});
 });
 

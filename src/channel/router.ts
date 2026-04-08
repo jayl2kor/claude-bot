@@ -6,6 +6,7 @@
  * routes to sessions, and sends responses back.
  */
 
+import { buildAttachmentPrompt } from "../attachments/prompt.js";
 import { handleMemorySearch } from "../commands/memory-search.js";
 import type { ContextBuilder } from "../context/builder.js";
 import type { ResultMessage } from "../executor/types.js";
@@ -106,11 +107,13 @@ export class MessageRouter {
 		if (this.dedup.has(msg.id)) return;
 		this.dedup.add(msg.id);
 
+		const attachmentCount = msg.attachments?.length ?? 0;
 		logger.info("Message received", {
 			channel: plugin.id,
 			userId: msg.userId,
 			userName: msg.userName,
 			contentLength: msg.content.length,
+			attachments: attachmentCount,
 		});
 
 		// Record activity for monitoring
@@ -204,8 +207,14 @@ export class MessageRouter {
 				defaultModel: sms.defaultModel,
 			});
 			selectedModel = classification.tier;
-			sms.statsTracker.setSessionModel(sessionKey, classification.tier, msg.timestamp);
-			void sms.statsTracker.record(classification.tier, classification.isOverride).catch(() => {});
+			sms.statsTracker.setSessionModel(
+				sessionKey,
+				classification.tier,
+				msg.timestamp,
+			);
+			void sms.statsTracker
+				.record(classification.tier, classification.isOverride)
+				.catch(() => {});
 			logger.info("Model selected", {
 				tier: classification.tier,
 				confidence: classification.confidence,
@@ -214,11 +223,14 @@ export class MessageRouter {
 			});
 		}
 
+		// Inject attachment file paths into user prompt (keeps them in user context, not system)
+		const userPrompt = buildAttachmentPrompt(msg.content, msg.attachments);
+
 		// Spawn a new session for every message
 		const handle = await this.deps.sessionManager.getOrCreate(
 			msg.userId,
 			msg.channelId,
-			msg.content,
+			userPrompt,
 			systemPrompt,
 			selectedModel,
 		);

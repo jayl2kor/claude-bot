@@ -385,7 +385,9 @@ describe("MessageRouter smart model selection", () => {
 	it("does not set model when smartModelSelection disabled", async () => {
 		const plugin = makePlugin();
 		let capturedHandler!: (msg: IncomingMessage) => Promise<void>;
-		vi.mocked(plugin.onMessage).mockImplementation((h) => { capturedHandler = h; });
+		vi.mocked(plugin.onMessage).mockImplementation((h) => {
+			capturedHandler = h;
+		});
 		const deps = makeDeps({ plugins: [plugin] });
 		const router = new MessageRouter(deps);
 		router.start();
@@ -400,7 +402,9 @@ describe("MessageRouter smart model selection", () => {
 	it("selects opus for complexity keywords", async () => {
 		const plugin = makePlugin();
 		let capturedHandler!: (msg: IncomingMessage) => Promise<void>;
-		vi.mocked(plugin.onMessage).mockImplementation((h) => { capturedHandler = h; });
+		vi.mocked(plugin.onMessage).mockImplementation((h) => {
+			capturedHandler = h;
+		});
 		const mockStats = {
 			getSessionModel: vi.fn().mockReturnValue(undefined),
 			setSessionModel: vi.fn(),
@@ -422,7 +426,9 @@ describe("MessageRouter smart model selection", () => {
 	it("selects haiku for greeting", async () => {
 		const plugin = makePlugin();
 		let capturedHandler!: (msg: IncomingMessage) => Promise<void>;
-		vi.mocked(plugin.onMessage).mockImplementation((h) => { capturedHandler = h; });
+		vi.mocked(plugin.onMessage).mockImplementation((h) => {
+			capturedHandler = h;
+		});
 		const mockStats = {
 			getSessionModel: vi.fn().mockReturnValue(undefined),
 			setSessionModel: vi.fn(),

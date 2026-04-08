@@ -63,8 +63,16 @@ const KOREAN_GREETINGS = [
 ];
 
 const ENGLISH_GREETINGS = [
-	"hi", "hello", "hey", "yo", "sup",
-	"good morning", "good evening", "good night", "gm", "gn",
+	"hi",
+	"hello",
+	"hey",
+	"yo",
+	"sup",
+	"good morning",
+	"good evening",
+	"good night",
+	"gm",
+	"gn",
 ];
 
 const SHORT_MSG_THRESHOLD = 30;
@@ -87,14 +95,22 @@ function isGreeting(text: string): boolean {
 }
 
 const COMPLEX_KEYWORDS_KR = [
-	"설계", "아키텍처", "깊이 분석",
-	"심층 분석", "리팩토링 전략",
-	"시스템 디자인", "최적화 전략",
+	"설계",
+	"아키텍처",
+	"깊이 분석",
+	"심층 분석",
+	"리팩토링 전략",
+	"시스템 디자인",
+	"최적화 전략",
 ];
 
 const COMPLEX_KEYWORDS_EN = [
-	"architecture", "design pattern", "system design",
-	"deep analysis", "in-depth review", "refactoring strategy",
+	"architecture",
+	"design pattern",
+	"system design",
+	"deep analysis",
+	"in-depth review",
+	"refactoring strategy",
 ];
 
 const CODE_BLOCK_RE = /```[\s\S]*?```/;
@@ -115,16 +131,52 @@ function hasCodeBlockWithLength(text: string, minLength: number): boolean {
 }
 
 const TECHNICAL_KEYWORDS = [
-	"함수", "변수", "클래스", "타입",
-	"인터페이스", "모듈", "패키지",
-	"라이브러리", "프레임워크",
-	"데이터베이스", "api", "rest", "graphql", "sql",
-	"docker", "kubernetes", "function", "class", "type", "interface",
-	"module", "import", "export", "typescript", "javascript", "python",
-	"react", "node", "npm", "git", "deploy", "debug", "error", "bug",
-	"fix", "test", "코드", "구현", "개발", "배포",
-	"테스트", "디버그", "에러", "버그",
-	"제네릭", "엔드포인트",
+	"함수",
+	"변수",
+	"클래스",
+	"타입",
+	"인터페이스",
+	"모듈",
+	"패키지",
+	"라이브러리",
+	"프레임워크",
+	"데이터베이스",
+	"api",
+	"rest",
+	"graphql",
+	"sql",
+	"docker",
+	"kubernetes",
+	"function",
+	"class",
+	"type",
+	"interface",
+	"module",
+	"import",
+	"export",
+	"typescript",
+	"javascript",
+	"python",
+	"react",
+	"node",
+	"npm",
+	"git",
+	"deploy",
+	"debug",
+	"error",
+	"bug",
+	"fix",
+	"test",
+	"코드",
+	"구현",
+	"개발",
+	"배포",
+	"테스트",
+	"디버그",
+	"에러",
+	"버그",
+	"제네릭",
+	"엔드포인트",
 ];
 
 function hasTechnicalKeywords(text: string): boolean {

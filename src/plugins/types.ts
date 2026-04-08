@@ -22,6 +22,8 @@ export type IncomingMessage = {
 	replyTo?: string;
 	/** Recent channel messages for conversation context. */
 	recentMessages?: ChannelChatMessage[];
+	/** Attached files (images, documents, code). */
+	attachments?: readonly import("../attachments/types.js").Attachment[];
 };
 
 export type SlashCommand = {

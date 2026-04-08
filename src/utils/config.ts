@@ -63,6 +63,12 @@ const CollaborationConfigSchema = z.object({
 	sharedDir: z.string().optional(),
 });
 
+const AttachmentConfigSchema = z.object({
+	maxFileSizeMb: z.number().default(10),
+	maxTotalSizeMb: z.number().default(25),
+	retentionDays: z.number().default(7),
+});
+
 const StudyConfigSchema = z.object({
 	enabled: z.boolean().default(false),
 	maxDailySessions: z.number().default(5),
@@ -100,6 +106,7 @@ const DaemonConfigSchema = z.object({
 	collaboration: CollaborationConfigSchema.default({}),
 	growthReport: GrowthReportConfigSchema.default({}),
 	smartModelSelection: SmartModelSelectionSchema.default({}),
+	attachments: AttachmentConfigSchema.default({}),
 	knowledgeFeed: KnowledgeFeedConfigSchema.default({}),
 	study: StudyConfigSchema.default({}),
 	evaluation: EvaluationConfigSchema.default({}),
