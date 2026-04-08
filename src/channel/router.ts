@@ -51,8 +51,14 @@ export type MessageRouterDeps = {
 
 export class MessageRouter {
 	private readonly dedup = new BoundedUUIDSet(1000);
+	private accepting = true;
 
 	constructor(private readonly deps: MessageRouterDeps) {}
+
+	stop(): void {
+		this.accepting = false;
+		logger.info("Router stopped accepting new messages");
+	}
 
 	/** Wire up all channel plugins to the router. */
 	start(): void {
@@ -103,6 +109,11 @@ export class MessageRouter {
 		plugin: ChannelPlugin,
 		msg: IncomingMessage,
 	): Promise<void> {
+		if (!this.accepting) {
+			logger.debug("Message rejected — router shutting down", { id: msg.id });
+			return;
+		}
+
 		// Dedup check
 		if (this.dedup.has(msg.id)) return;
 		this.dedup.add(msg.id);

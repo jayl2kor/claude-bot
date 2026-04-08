@@ -567,6 +567,9 @@ export async function runDaemon(
 		logger.info("Shutting down...");
 		clearInterval(pointerInterval);
 
+		// Stop router first — reject any messages arriving during shutdown
+		router.stop();
+
 		// Stop cron jobs first (no new background work)
 		await cronService.stop();
 
