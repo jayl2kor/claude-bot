@@ -7,11 +7,11 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MessageRouter } from "./router.js";
-import type { MessageRouterDeps } from "./router.js";
-import type { ChannelPlugin, IncomingMessage } from "../plugins/types.js";
 import type { SessionHandle } from "../executor/spawner.js";
 import type { SessionDoneStatus } from "../executor/types.js";
+import type { ChannelPlugin, IncomingMessage } from "../plugins/types.js";
+import { MessageRouter } from "./router.js";
+import type { MessageRouterDeps } from "./router.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -50,7 +50,9 @@ function makePlugin(overrides: Partial<ChannelPlugin> = {}): ChannelPlugin {
 	};
 }
 
-function makeIncomingMessage(overrides: Partial<IncomingMessage> = {}): IncomingMessage {
+function makeIncomingMessage(
+	overrides: Partial<IncomingMessage> = {},
+): IncomingMessage {
 	return {
 		id: "msg-1",
 		userId: "user1",
@@ -62,7 +64,9 @@ function makeIncomingMessage(overrides: Partial<IncomingMessage> = {}): Incoming
 	};
 }
 
-function makeDeps(overrides: Partial<MessageRouterDeps> = {}): MessageRouterDeps {
+function makeDeps(
+	overrides: Partial<MessageRouterDeps> = {},
+): MessageRouterDeps {
 	return {
 		sessionManager: {
 			getOrCreate: vi.fn().mockResolvedValue(makeHandle()),
@@ -84,6 +88,7 @@ function makeDeps(overrides: Partial<MessageRouterDeps> = {}): MessageRouterDeps
 			toPromptSection: vi.fn().mockResolvedValue(""),
 		} as unknown as MessageRouterDeps["knowledge"],
 		reflections: {
+			getRecent: vi.fn().mockResolvedValue([]),
 			toPromptSection: vi.fn().mockResolvedValue(""),
 		} as unknown as MessageRouterDeps["reflections"],
 		activityTracker: {
@@ -204,7 +209,9 @@ describe("MessageRouter prompt injection boundary (CRITICAL #1)", () => {
 		const buildMock = vi.fn().mockResolvedValue("clean system prompt");
 		const deps = makeDeps({
 			plugins: [plugin],
-			contextBuilder: { build: buildMock } as unknown as MessageRouterDeps["contextBuilder"],
+			contextBuilder: {
+				build: buildMock,
+			} as unknown as MessageRouterDeps["contextBuilder"],
 		});
 		const router = new MessageRouter(deps);
 		router.start();
@@ -248,7 +255,9 @@ describe("MessageRouter prompt injection boundary (CRITICAL #1)", () => {
 				shutdown: vi.fn(),
 				getActiveSessionKeys: vi.fn().mockReturnValue([]),
 			} as unknown as MessageRouterDeps["sessionManager"],
-			integrator: { integrate: integrateMock } as unknown as MessageRouterDeps["integrator"],
+			integrator: {
+				integrate: integrateMock,
+			} as unknown as MessageRouterDeps["integrator"],
 		});
 		const router = new MessageRouter(deps);
 		router.start();
@@ -365,7 +374,9 @@ describe("MessageRouter error handling (MEDIUM #6)", () => {
 		const router = new MessageRouter(deps);
 		router.start();
 
-		await expect(capturedHandler(makeIncomingMessage({ id: "rec-err" }))).resolves.not.toThrow();
+		await expect(
+			capturedHandler(makeIncomingMessage({ id: "rec-err" })),
+		).resolves.not.toThrow();
 	});
 });
 

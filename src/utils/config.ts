@@ -63,6 +63,14 @@ const CollaborationConfigSchema = z.object({
 	sharedDir: z.string().optional(),
 });
 
+const StudyConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	maxDailySessions: z.number().default(5),
+	maxSubTopics: z.number().default(8),
+	model: z.string().default("sonnet"),
+	maxTurns: z.number().default(3),
+});
+
 const KnowledgeFeedConfigSchema = z.object({
 	enabled: z.boolean().default(false),
 	pollIntervalMs: z.number().default(30_000),
@@ -93,6 +101,7 @@ const DaemonConfigSchema = z.object({
 	growthReport: GrowthReportConfigSchema.default({}),
 	smartModelSelection: SmartModelSelectionSchema.default({}),
 	knowledgeFeed: KnowledgeFeedConfigSchema.default({}),
+	study: StudyConfigSchema.default({}),
 	evaluation: EvaluationConfigSchema.default({}),
 });
 

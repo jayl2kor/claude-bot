@@ -219,6 +219,25 @@ vi.mock("../model/stats.js", () => ({
 	})),
 }));
 
+vi.mock("../study/queue.js", () => ({
+	StudyQueue: vi.fn().mockImplementation(() => ({
+		setResearcher: vi.fn(),
+		setNotifyFn: vi.fn(),
+		enqueue: vi.fn(async () => ({ success: true })),
+		getState: vi.fn(async () => ({
+			requests: [],
+			dailyCount: 0,
+			dailyResetAt: 0,
+		})),
+	})),
+}));
+
+vi.mock("../study/researcher.js", () => ({
+	TopicResearcher: vi.fn().mockImplementation(() => ({
+		research: vi.fn(async () => ({ subtopics: [], knowledgeIds: [] })),
+	})),
+}));
+
 vi.mock("../utils/sleep.js", () => ({
 	sleep: vi.fn(async () => {}),
 }));
@@ -267,12 +286,19 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 			maxTurns: 10,
 			skipPermissions: false,
 			git: { enabled: false, autoSync: false },
+			gitWatcher: { enabled: false, branches: ["main"], pollIntervalMs: 60000, maxReviewsPerHour: 5, ignoreAuthors: [], reviewChannelId: "", maxDiffChars: 4000 },
 			collaboration: { enabled: false, role: "general" },
 			smartModelSelection: { enabled: false, defaultModel: "sonnet" },
+			growthReport: { enabled: false, intervalMs: 604_800_000, language: "ko" },
+			knowledgeFeed: { enabled: false, pollIntervalMs: 30_000, ttlMs: 604_800_000, confidenceMultiplier: 0.7 },
+			study: {
+				enabled: false,
+				maxDailySessions: 5,
+				maxSubTopics: 8,
+				model: "sonnet",
+				maxTurns: 3,
+			},
 			evaluation: { enabled: false, probability: 0.3, maxPendingCount: 5 },
-			growthReport: { enabled: false, intervalMs: 604800000, language: "ko" },
-			gitWatcher: { enabled: false, branches: ["main"], pollIntervalMs: 60000, maxReviewsPerHour: 5, ignoreAuthors: [], reviewChannelId: "", maxDiffChars: 4000 },
-			knowledgeFeed: { enabled: false, pollIntervalMs: 30000, ttlMs: 604800000, confidenceMultiplier: 0.7 },
 		},
 		expertise: {
 			domains: [],
