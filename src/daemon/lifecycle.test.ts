@@ -170,6 +170,7 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 			collaboration: { enabled: false, role: "general" },
 			smartModelSelection: { enabled: false, defaultModel: "sonnet" },
 			attachments: { maxFileSizeMb: 10, maxTotalSizeMb: 25, retentionDays: 7 },
+			evaluation: { enabled: false, probability: 0.3, maxPendingCount: 5 },
 		},
 		...overrides,
 	};
@@ -178,6 +179,14 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 function makeAbortController(): { signal: AbortSignal; abort: () => void } {
 	const ctrl = new AbortController();
 	return { signal: ctrl.signal, abort: () => ctrl.abort() };
+}
+
+/**
+ * Aborts the controller on the next event loop tick so that runDaemon has time
+ * to set up its abort listener before the signal fires.
+ */
+function abortNextTick(abort: () => void): void {
+	setImmediate(abort);
 }
 
 async function makeTempDataDir(): Promise<string> {
@@ -199,8 +208,8 @@ describe("runDaemon — CLI fallback", () => {
 		const config = makeConfig({ channels: {} });
 
 		const runPromise = runDaemon(config, signal, dataDir);
-		// Abort immediately to trigger shutdown
-		abort();
+		// Abort on next tick so the abort listener is set up first
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(createCliPlugin).toHaveBeenCalledTimes(1);
@@ -224,7 +233,7 @@ describe("runDaemon — Discord channel", () => {
 		});
 
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(createDiscordPlugin).toHaveBeenCalledTimes(1);
@@ -249,7 +258,7 @@ describe("runDaemon — Telegram channel", () => {
 		});
 
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(createTelegramPlugin).toHaveBeenCalledTimes(1);
@@ -282,7 +291,7 @@ describe("runDaemon — crash recovery pointer", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(readMock).toHaveBeenCalled();
@@ -305,7 +314,7 @@ describe("runDaemon — crash recovery pointer", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(readMock).toHaveBeenCalled();
@@ -329,7 +338,7 @@ describe("runDaemon — process lock", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(acquireMock).toHaveBeenCalledTimes(1);
@@ -388,7 +397,7 @@ describe("runDaemon — shutdown sequence", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(disconnectMock).toHaveBeenCalledTimes(1);
@@ -409,7 +418,7 @@ describe("runDaemon — shutdown sequence", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(shutdownMock).toHaveBeenCalledTimes(1);
@@ -430,7 +439,7 @@ describe("runDaemon — shutdown sequence", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(clearMock).toHaveBeenCalled();
@@ -469,7 +478,7 @@ describe("runDaemon — shutdown sequence", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(order.indexOf("cron-stop")).toBeLessThan(
@@ -494,7 +503,7 @@ describe("runDaemon — pointer refresh interval", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		// write() called at least once for initial pointer write

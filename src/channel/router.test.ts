@@ -88,13 +88,14 @@ function makeDeps(
 			toPromptSection: vi.fn().mockResolvedValue(""),
 		} as unknown as MessageRouterDeps["knowledge"],
 		reflections: {
-			getRecent: vi.fn().mockResolvedValue([]),
+			toPromptSection: vi.fn().mockResolvedValue(""),
 		} as unknown as MessageRouterDeps["reflections"],
 		activityTracker: {
 			recordActivity: vi.fn().mockResolvedValue(undefined),
 		} as unknown as MessageRouterDeps["activityTracker"],
 		history: {
 			append: vi.fn().mockResolvedValue(undefined),
+			getRecent: vi.fn().mockResolvedValue([]),
 		} as unknown as MessageRouterDeps["history"],
 		integrator: {
 			integrate: vi.fn().mockResolvedValue(undefined),

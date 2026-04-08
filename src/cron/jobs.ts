@@ -9,6 +9,7 @@
 
 import { cleanOldUploads } from "../attachments/cleanup.js";
 import type { CollaborationManager } from "../collaboration/manager.js";
+import type { PeerEvaluator } from "../evaluation/evaluator.js";
 import { spawnClaude } from "../executor/spawner.js";
 import { analyzeActivity } from "../memory/activity-analyzer.js";
 import type { ActivityTracker } from "../memory/activity.js";
@@ -31,6 +32,7 @@ export type CronJobDeps = {
 	activityTracker: ActivityTracker;
 	history: ChatHistoryManager;
 	collaboration?: CollaborationManager;
+	evaluator?: PeerEvaluator;
 	plugins: ChannelPlugin[];
 	/** Upload directory for attachment cleanup. */
 	uploadDir?: string;
@@ -101,6 +103,16 @@ export function createBuiltinJobs(deps: CronJobDeps): CronJob[] {
 						intervalMs: 5_000, // 5 seconds
 						runOnStart: false,
 						handler: () => deps.collaboration!.pollAndExecute(),
+					},
+				]
+			: []),
+		...(deps.evaluator
+			? [
+					{
+						id: "peer-evaluation",
+						intervalMs: 30 * 60 * 1000, // 30 minutes
+						runOnStart: false,
+						handler: () => deps.evaluator!.evaluatePending(),
 					},
 				]
 			: []),

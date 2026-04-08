@@ -50,6 +50,7 @@ export function createDiscordPlugin(
 			GatewayIntentBits.MessageContent,
 		],
 		partials: [Partials.Channel],
+		allowedMentions: { parse: ["roles", "users"] },
 	});
 
 	let messageHandler: ((msg: IncomingMessage) => Promise<void>) | null = null;
@@ -230,12 +231,16 @@ export function createDiscordPlugin(
 			const channel = await client.channels.fetch(channelId);
 			if (!channel?.isTextBased()) return;
 
+			// Sanitize @everyone / @here to prevent unintended mass pings
+			const sanitized = content.replace(/@(everyone|here)/g, "@​$1");
+
 			// Split long messages (Discord limit: 2000 chars)
-			const chunks = splitMessage(content, 2000);
+			const chunks = splitMessage(sanitized, 2000);
 			for (const chunk of chunks) {
 				if ("send" in channel) {
 					await channel.send({
 						content: chunk,
+						allowedMentions: { parse: ["roles", "users"] },
 						...(replyTo ? { reply: { messageReference: replyTo } } : {}),
 					});
 				}

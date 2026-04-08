@@ -51,6 +51,13 @@ const AttachmentConfigSchema = z.object({
 	retentionDays: z.number().default(7),
 });
 
+const EvaluationConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	sharedDir: z.string().optional(),
+	probability: z.number().min(0).max(1).default(0.3),
+	maxPendingCount: z.number().default(5),
+});
+
 const DaemonConfigSchema = z.object({
 	maxConcurrentSessions: z.number().default(10),
 	sessionTimeoutMs: z.number().default(30 * 60 * 1000),
@@ -64,6 +71,7 @@ const DaemonConfigSchema = z.object({
 	collaboration: CollaborationConfigSchema.default({}),
 	smartModelSelection: SmartModelSelectionSchema.default({}),
 	attachments: AttachmentConfigSchema.default({}),
+	evaluation: EvaluationConfigSchema.default({}),
 });
 
 export const AppConfigSchema = z.object({
