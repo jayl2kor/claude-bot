@@ -7,7 +7,8 @@
 
 import { spawnClaude } from "../executor/spawner.js";
 import { logger } from "../utils/logger.js";
-import { EvaluationStore, type EvaluationResult } from "./store.js";
+import { EvaluationStore } from "./store.js";
+import type { EvaluationResult } from "./types.js";
 
 const MAX_EVALUATIONS_PER_RUN = 3;
 
@@ -45,6 +46,7 @@ export class PeerEvaluator {
 		});
 
 		for (const req of batch) {
+			await this.store.updateStatus(req.id, "evaluating");
 			await this.evaluate(req.id, req.petId, req.promptSummary, req.responseSummary);
 		}
 

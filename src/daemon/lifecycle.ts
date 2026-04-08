@@ -235,8 +235,12 @@ export async function runDaemon(
 				if (status !== "completed") return;
 				// Extract userId:channelId from potentially timestamped key
 				const parts = sessionKey.split(":");
-				const userId = parts[0] ?? "";
-				const channelId = parts[1] ?? "";
+				const userId = parts[0];
+				const channelId = parts[1];
+				if (!userId || !channelId) {
+					logger.warn("EvaluationPublisher: skipped — malformed sessionKey", { sessionKey });
+					return;
+				}
 				void publisher.maybePublish(sessionKey, userId, channelId, history);
 			});
 		}

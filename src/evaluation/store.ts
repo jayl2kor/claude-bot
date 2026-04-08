@@ -19,17 +19,9 @@ import {
 import { dirname, join } from "node:path";
 import { isENOENT } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
-import type { EvaluationRequest } from "./types.js";
+import type { EvaluationRequest, EvaluationResult, EvaluationStatus } from "./types.js";
 
-export type EvaluationResult = {
-	id: string;
-	evaluatorId: string;
-	score: number;
-	feedback: string;
-	strengths: string[];
-	improvements: string[];
-	evaluatedAt: number;
-};
+export type { EvaluationResult };
 
 export class EvaluationStore {
 	constructor(private readonly baseDir: string) {}
@@ -37,6 +29,16 @@ export class EvaluationStore {
 	/** Save an evaluation request to {id}.json */
 	async create(req: EvaluationRequest): Promise<void> {
 		await this.write(this.requestPath(req.id), req);
+	}
+
+	/** Update the status of an evaluation request. */
+	async updateStatus(id: string, status: EvaluationStatus): Promise<void> {
+		const req = await this.readRequest(id);
+		if (!req) {
+			logger.warn("EvaluationStore: updateStatus — request not found", { id });
+			return;
+		}
+		await this.write(this.requestPath(id), { ...req, status });
 	}
 
 	/** Read an evaluation request by id. */
@@ -77,36 +79,23 @@ export class EvaluationStore {
 	/**
 	 * Return pending evaluation requests that:
 	 * - were NOT created by evaluatorId (don't self-evaluate)
+	 * - are NOT in "evaluating" status (being processed by another evaluator)
 	 * - do NOT yet have a result file
 	 * - have not expired
 	 */
 	async listPending(evaluatorId: string): Promise<EvaluationRequest[]> {
-		let files: string[];
-		try {
-			files = await readdir(this.baseDir);
-		} catch (err) {
-			if (isENOENT(err)) return [];
-			throw err;
-		}
-
-		const now = Date.now();
+		const active = await this.readActiveRequests();
 		const pending: EvaluationRequest[] = [];
 
-		for (const file of files) {
-			if (!file.endsWith(".json") || file.endsWith(".result.json")) continue;
-
-			const id = file.replace(".json", "");
-			const req = await this.readRequest(id);
-			if (!req) continue;
-
+		for (const req of active) {
 			// Skip our own requests
 			if (req.petId === evaluatorId) continue;
 
-			// Skip expired requests
-			if (req.expiresAt < now) continue;
+			// Skip requests already being evaluated
+			if (req.status === "evaluating") continue;
 
 			// Skip if already evaluated (result file exists)
-			const result = await this.readResult(id);
+			const result = await this.readResult(req.id);
 			if (result) continue;
 
 			pending.push(req);
@@ -144,16 +133,32 @@ export class EvaluationStore {
 
 	/** Count pending requests (for maxPendingCount check). */
 	async countPending(requesterId: string): Promise<number> {
+		const active = await this.readActiveRequests();
+		let count = 0;
+
+		for (const req of active) {
+			if (req.petId !== requesterId) continue;
+
+			// Count unevaluated ones
+			const result = await this.readResult(req.id);
+			if (!result) count++;
+		}
+
+		return count;
+	}
+
+	/** Return all non-expired EvaluationRequests from the store directory. */
+	private async readActiveRequests(): Promise<EvaluationRequest[]> {
 		let files: string[];
 		try {
 			files = await readdir(this.baseDir);
 		} catch (err) {
-			if (isENOENT(err)) return 0;
+			if (isENOENT(err)) return [];
 			throw err;
 		}
 
 		const now = Date.now();
-		let count = 0;
+		const active: EvaluationRequest[] = [];
 
 		for (const file of files) {
 			if (!file.endsWith(".json") || file.endsWith(".result.json")) continue;
@@ -161,15 +166,14 @@ export class EvaluationStore {
 			const id = file.replace(".json", "");
 			const req = await this.readRequest(id);
 			if (!req) continue;
-			if (req.petId !== requesterId) continue;
+
+			// Skip expired requests
 			if (req.expiresAt < now) continue;
 
-			// Count unevaluated ones
-			const result = await this.readResult(id);
-			if (!result) count++;
+			active.push(req);
 		}
 
-		return count;
+		return active;
 	}
 
 	private requestPath(id: string): string {

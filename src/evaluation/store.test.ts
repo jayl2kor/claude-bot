@@ -7,8 +7,8 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { EvaluationStore, type EvaluationResult } from "./store.js";
-import type { EvaluationRequest } from "./types.js";
+import { EvaluationStore } from "./store.js";
+import type { EvaluationRequest, EvaluationResult } from "./types.js";
 
 function makeTempDir(): string {
 	return join(tmpdir(), `eval-store-test-${randomUUID()}`);
@@ -25,7 +25,6 @@ function makeRequest(overrides: Partial<EvaluationRequest> = {}): EvaluationRequ
 		responseSummary: "봇: 안녕하세요!",
 		timestamp: now,
 		status: "pending",
-		feedback: null,
 		expiresAt: now + 24 * 60 * 60 * 1000,
 		...overrides,
 	};
@@ -150,6 +149,13 @@ describe("EvaluationStore", () => {
 			await store.create(req2);
 			const pending = await store.listPending("pet-b");
 			expect(pending).toHaveLength(2);
+		});
+
+		it("excludes requests in evaluating status", async () => {
+			const req = makeRequest({ petId: "pet-a", status: "evaluating" });
+			await store.create(req);
+			const pending = await store.listPending("pet-b");
+			expect(pending).toHaveLength(0);
 		});
 	});
 

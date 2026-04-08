@@ -111,7 +111,6 @@ export class EvaluationPublisher {
 			responseSummary,
 			timestamp: now,
 			status: "pending",
-			feedback: null,
 			expiresAt: now + TWENTY_FOUR_HOURS,
 		};
 
