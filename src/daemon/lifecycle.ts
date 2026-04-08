@@ -12,6 +12,7 @@ import { createTelegramPlugin } from "../channel/telegram/plugin.js";
 import { CollaborationManager } from "../collaboration/manager.js";
 import { ContextBuilder } from "../context/builder.js";
 import { createBuiltinJobs, createGitWatcherJob, createGrowthReportJob } from "../cron/jobs.js";
+import type { KnowledgeFeedDeps } from "../cron/jobs.js";
 import { CronService } from "../cron/service.js";
 import { EvaluationPublisher } from "../evaluation/publisher.js";
 import { EvaluationStore } from "../evaluation/store.js";
@@ -21,6 +22,9 @@ import { GitWatcher } from "../git/watcher.js";
 import { GrowthCollector } from "../growth/collector.js";
 import { FileReportHistoryStore } from "../growth/history-store.js";
 import { GrowthReporter } from "../growth/reporter.js";
+import { FeedStore } from "../knowledge-feed/feed-store.js";
+import { FeedPublisher } from "../knowledge-feed/publisher.js";
+import { FeedSubscriber } from "../knowledge-feed/subscriber.js";
 import { ActivityTracker } from "../memory/activity.js";
 import { ChatHistoryManager } from "../memory/history.js";
 import { KnowledgeManager } from "../memory/knowledge.js";
@@ -175,14 +179,47 @@ export async function runDaemon(
 			logger.info("Channel connected", { channel: plugin.id });
 		}
 
-		// 8. Initialize teaching pipeline
+		// 8. Initialize knowledge feed (optional)
+		const feedConfig = config.daemon.knowledgeFeed;
+		let feedPublisher: FeedPublisher | undefined;
+		let knowledgeFeedDeps: KnowledgeFeedDeps | undefined;
+
+		if (feedConfig?.enabled) {
+			const feedSharedDir = resolve(
+				feedConfig.sharedDir ??
+					resolve(DATA_DIR, "..", "shared", "knowledge-feed"),
+			);
+			const feedStore = new FeedStore(feedSharedDir);
+			feedPublisher = new FeedPublisher(feedStore, config.persona.name);
+			const feedSubscriber = new FeedSubscriber({
+				feedStore,
+				knowledge,
+				petId: config.persona.name,
+				stateDir: resolve(DATA_DIR, "state"),
+				confidenceMultiplier: feedConfig.confidenceMultiplier,
+			});
+			knowledgeFeedDeps = {
+				feedStore,
+				feedSubscriber,
+				pollIntervalMs: feedConfig.pollIntervalMs,
+				ttlMs: feedConfig.ttlMs,
+			};
+			logger.info("Knowledge feed enabled", {
+				sharedDir: feedSharedDir,
+				pollIntervalMs: feedConfig.pollIntervalMs,
+				confidenceMultiplier: feedConfig.confidenceMultiplier,
+			});
+		}
+
+		// 8b. Initialize teaching pipeline
 		const integrator = new SessionIntegrator(
 			knowledge,
 			reflections,
 			relationships,
+			feedPublisher,
 		);
 
-		// 8b. Initialize smart model selection (optional)
+		// 8c. Initialize smart model selection (optional)
 		const smsConfig = config.daemon.smartModelSelection;
 		const modelStatsTracker = new ModelStatsTracker(
 			resolve(DATA_DIR, "model-stats"),
@@ -278,6 +315,7 @@ export async function runDaemon(
 			activityTracker,
 			history,
 			collaboration,
+			knowledgeFeed: knowledgeFeedDeps,
 			evaluator: peerEvaluator,
 			plugins,
 		})) {
@@ -383,7 +421,7 @@ export async function runDaemon(
 		};
 		await writePointerState();
 
-		// 10. Start pointer refresh interval
+		// 13. Start pointer refresh interval
 		const pointerInterval = setInterval(
 			() => void writePointerState(),
 			config.daemon.pointerRefreshMs,
@@ -394,7 +432,7 @@ export async function runDaemon(
 			persona: config.persona.name,
 		});
 
-		// 11. Wait for shutdown signal
+		// 14. Wait for shutdown signal
 		await new Promise<void>((resolve) => {
 			if (signal.aborted) return resolve();
 			signal.addEventListener("abort", () => resolve(), { once: true });

@@ -41,6 +41,11 @@ const GrowthReportConfigSchema = z.object({
 	language: z.string().default("ko"),
 });
 
+const SmartModelSelectionSchema = z.object({
+	enabled: z.boolean().default(false),
+	defaultModel: z.enum(["haiku", "sonnet", "opus"]).default("sonnet"),
+});
+
 const GitWatcherConfigSchema = z.object({
 	enabled: z.boolean().default(false),
 	branches: z.array(z.string()).default(["main"]),
@@ -54,6 +59,14 @@ const GitWatcherConfigSchema = z.object({
 const CollaborationConfigSchema = z.object({
 	enabled: z.boolean().default(false),
 	role: z.string().default("general"),
+	sharedDir: z.string().optional(),
+});
+
+const KnowledgeFeedConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	pollIntervalMs: z.number().default(30_000),
+	ttlMs: z.number().default(7 * 24 * 60 * 60 * 1000),
+	confidenceMultiplier: z.number().min(0).max(1).default(0.7),
 	sharedDir: z.string().optional(),
 });
 
@@ -77,6 +90,8 @@ const DaemonConfigSchema = z.object({
 	gitWatcher: GitWatcherConfigSchema.default({}),
 	collaboration: CollaborationConfigSchema.default({}),
 	growthReport: GrowthReportConfigSchema.default({}),
+	smartModelSelection: SmartModelSelectionSchema.default({}),
+	knowledgeFeed: KnowledgeFeedConfigSchema.default({}),
 	evaluation: EvaluationConfigSchema.default({}),
 });
 

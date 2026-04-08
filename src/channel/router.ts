@@ -14,6 +14,8 @@ import type { ChatHistoryManager } from "../memory/history.js";
 import type { KnowledgeManager } from "../memory/knowledge.js";
 import type { ReflectionManager } from "../memory/reflection.js";
 import type { RelationshipManager } from "../memory/relationships.js";
+import { classifyMessage } from "../model/classifier.js";
+import type { ModelStatsTracker } from "../model/stats.js";
 import type { ChannelPlugin, IncomingMessage } from "../plugins/types.js";
 import { BoundedUUIDSet } from "../session/dedup.js";
 import type { SessionManager } from "../session/manager.js";
@@ -32,6 +34,10 @@ export type MessageRouterDeps = {
 	history: ChatHistoryManager;
 	integrator: SessionIntegrator;
 	plugins: ChannelPlugin[];
+	smartModelSelection?: {
+		enabled: boolean;
+		statsTracker: ModelStatsTracker;
+	};
 };
 
 export class MessageRouter {
@@ -145,12 +151,37 @@ export class MessageRouter {
 			msg.recentMessages,
 		);
 
+		// Smart model selection (when enabled)
+		let selectedModel: string | undefined;
+		const sms = this.deps.smartModelSelection;
+		if (sms?.enabled) {
+			const sessionKey = `${msg.userId}:${msg.channelId}`;
+			const cached = sms.statsTracker.getSessionModel(sessionKey);
+			const classification = classifyMessage(msg.content, {
+				userId: msg.userId,
+				channelId: msg.channelId,
+				timestamp: msg.timestamp,
+				previousModel: cached?.model,
+				previousTimestamp: cached?.timestamp,
+			});
+			selectedModel = classification.tier;
+			sms.statsTracker.setSessionModel(sessionKey, classification.tier, msg.timestamp);
+			void sms.statsTracker.record(classification.tier, classification.isOverride).catch(() => {});
+			logger.info("Model selected", {
+				tier: classification.tier,
+				confidence: classification.confidence,
+				reason: classification.reason,
+				isOverride: classification.isOverride,
+			});
+		}
+
 		// Spawn a new session for every message
 		const handle = await this.deps.sessionManager.getOrCreate(
 			msg.userId,
 			msg.channelId,
 			msg.content,
 			systemPrompt,
+			selectedModel,
 		);
 
 		if (!handle) {
