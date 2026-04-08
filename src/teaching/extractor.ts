@@ -7,8 +7,8 @@
 
 import { randomUUID } from "node:crypto";
 import type { KnowledgeEntry } from "../memory/knowledge.js";
-import { KnowledgeManager } from "../memory/knowledge.js";
-import { RelationshipManager } from "../memory/relationships.js";
+import type { KnowledgeManager } from "../memory/knowledge.js";
+import type { RelationshipManager } from "../memory/relationships.js";
 import { logger } from "../utils/logger.js";
 import type { TeachingIntent } from "./detector.js";
 
@@ -27,7 +27,10 @@ export class KnowledgeExtractor {
 	/**
 	 * Process detected teaching intents and store as knowledge/preferences.
 	 */
-	async extract(intents: TeachingIntent[], userId: string): Promise<ExtractionResult> {
+	async extract(
+		intents: TeachingIntent[],
+		userId: string,
+	): Promise<ExtractionResult> {
 		let stored = 0;
 		let skipped = 0;
 		const entries: KnowledgeEntry[] = [];
@@ -55,13 +58,15 @@ export class KnowledgeExtractor {
 
 			if (duplicate) {
 				if (intent.type === "correction") {
-					// Correction overrides existing knowledge
+					// Correction overrides existing knowledge — reset strength
 					const updated: KnowledgeEntry = {
 						...duplicate,
 						content: intent.payload,
 						source: "corrected",
 						confidence: 0.95,
 						updatedAt: Date.now(),
+						strength: 1.0,
+						lastReferencedAt: Date.now(),
 					};
 					await this.knowledge.upsert(updated);
 					entries.push(updated);
@@ -75,21 +80,29 @@ export class KnowledgeExtractor {
 			}
 
 			// New knowledge entry
+			const now = Date.now();
 			const entry: KnowledgeEntry = {
 				id: randomUUID(),
 				topic,
 				content: intent.payload,
 				source: intent.type === "correction" ? "corrected" : "taught",
 				taughtBy: userId,
-				createdAt: Date.now(),
-				updatedAt: Date.now(),
+				createdAt: now,
+				updatedAt: now,
 				confidence: intent.type === "correction" ? 0.95 : 0.85,
 				tags: extractTags(intent.payload),
+				strength: 1.0,
+				lastReferencedAt: now,
+				referenceCount: 0,
 			};
 
 			await this.knowledge.upsert(entry);
 			entries.push(entry);
-			logger.info("Knowledge stored", { topic, id: entry.id, source: entry.source });
+			logger.info("Knowledge stored", {
+				topic,
+				id: entry.id,
+				source: entry.source,
+			});
 			stored++;
 		}
 
