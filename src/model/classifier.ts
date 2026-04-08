@@ -199,7 +199,7 @@ export function classifyMessage(
 	}
 
 	const defaultResult: ClassificationResult = {
-		tier: "sonnet",
+		tier: ctx.defaultModel ?? "sonnet",
 		confidence: 0.5,
 		reason: "Default classification",
 		isOverride: false,

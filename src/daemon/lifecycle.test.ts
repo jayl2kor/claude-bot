@@ -58,6 +58,7 @@ vi.mock("../channel/telegram/plugin.js", () => ({
 vi.mock("../channel/router.js", () => ({
 	MessageRouter: vi.fn().mockImplementation(() => ({
 		start: vi.fn(),
+		startCommands: vi.fn(async () => {}),
 	})),
 }));
 
@@ -164,6 +165,10 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 			pointerRefreshMs: 300_000,
 			claudeModel: "sonnet",
 			maxTurns: 10,
+			skipPermissions: false,
+			git: { enabled: false, autoSync: false },
+			collaboration: { enabled: false, role: "general" },
+			smartModelSelection: { enabled: false, defaultModel: "sonnet" },
 		},
 		...overrides,
 	};

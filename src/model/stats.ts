@@ -63,6 +63,7 @@ export class ModelStatsTracker {
 	getSessionModel(
 		sessionKey: string,
 	): { model: ModelTier; timestamp: number } | undefined {
+		this.cleanExpiredCache();
 		return this.sessionCache.get(sessionKey);
 	}
 
@@ -71,6 +72,21 @@ export class ModelStatsTracker {
 		model: ModelTier,
 		timestamp: number,
 	): void {
+		this.cleanExpiredCache();
 		this.sessionCache.set(sessionKey, { model, timestamp });
+	}
+
+	/**
+	 * Remove session cache entries older than SESSION_CACHE_TTL_MS (30 minutes).
+	 * Called on each read/write to prevent unbounded memory growth in long-running daemons.
+	 */
+	private cleanExpiredCache(): void {
+		const now = Date.now();
+		const TTL = 30 * 60 * 1000; // 30 minutes
+		for (const [key, value] of this.sessionCache.entries()) {
+			if (now - value.timestamp > TTL) {
+				this.sessionCache.delete(key);
+			}
+		}
 	}
 }

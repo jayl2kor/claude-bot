@@ -37,6 +37,7 @@ export type MessageRouterDeps = {
 	smartModelSelection?: {
 		enabled: boolean;
 		statsTracker: ModelStatsTracker;
+		defaultModel?: import("../model/types.js").ModelTier;
 	};
 };
 
@@ -163,6 +164,7 @@ export class MessageRouter {
 				timestamp: msg.timestamp,
 				previousModel: cached?.model,
 				previousTimestamp: cached?.timestamp,
+				defaultModel: sms.defaultModel,
 			});
 			selectedModel = classification.tier;
 			sms.statsTracker.setSessionModel(sessionKey, classification.tier, msg.timestamp);
