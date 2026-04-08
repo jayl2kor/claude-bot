@@ -86,7 +86,7 @@ export class GitWatcher {
 		try {
 			logOutput = await git(this.workspacePath, [
 				"log",
-				`${lastSha}..HEAD`,
+				`${lastSha}..origin/${branch}`,
 				"--format=%H|%h|%an|%s|%at",
 				"--reverse",
 			]);
@@ -165,17 +165,29 @@ export class GitWatcher {
 
 	async getDiff(sha: string): Promise<string> {
 		try {
-			const diff = await git(this.workspacePath, ["diff", `${sha}^..${sha}`]);
+			const isRootCommit = await git(this.workspacePath, [
+				"rev-parse",
+				"--verify",
+				`${sha}^`,
+			])
+				.then(() => false)
+				.catch(() => true);
+
+			const diff = isRootCommit
+				? await git(this.workspacePath, ["show", "--stat", sha])
+				: await git(this.workspacePath, ["diff", `${sha}^..${sha}`]);
 
 			if (diff.length <= this.config.maxDiffChars) {
 				return diff;
 			}
 
-			const stat = await git(this.workspacePath, [
-				"diff",
-				"--stat",
-				`${sha}^..${sha}`,
-			]);
+			const stat = isRootCommit
+				? diff
+				: await git(this.workspacePath, [
+						"diff",
+						"--stat",
+						`${sha}^..${sha}`,
+					]);
 			const truncated = diff.slice(0, this.config.maxDiffChars);
 			return `${truncated}\n\n[truncated]\n\n--- stat ---\n${stat}`;
 		} catch (err) {

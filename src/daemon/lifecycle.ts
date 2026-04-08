@@ -248,6 +248,12 @@ export async function runDaemon(
 		// 11b. Git watcher cron job (optional, disabled by default)
 		const gitWatcherConfig = config.daemon.gitWatcher;
 		if (gitWatcherConfig.enabled && config.daemon.workspacePath) {
+			if (!gitWatcherConfig.reviewChannelId) {
+				logger.warn(
+					"GitWatcher: reviewChannelId is empty — reviews will not be delivered. Set daemon.gitWatcher.reviewChannelId in your config.",
+				);
+			}
+
 			const gitWatcher = new GitWatcher(
 				config.daemon.workspacePath,
 				gitWatcherConfig,

@@ -255,6 +255,8 @@ describe("GitWatcher", () => {
 			const cfg = makeConfig({ maxDiffChars: 50 });
 			const watcher = new GitWatcher("/fake/path", cfg, stateDir);
 			await initWatcher(watcher);
+			// rev-parse --verify sha^ → succeeds (not a root commit)
+			mockGit.mockResolvedValueOnce("parent-sha");
 			mockGit.mockResolvedValueOnce("a".repeat(200));
 			mockGit.mockResolvedValueOnce("file.ts | 10 +++--");
 			const result = await watcher.getDiff("sha1");
@@ -265,10 +267,23 @@ describe("GitWatcher", () => {
 		it("returns full diff when under maxDiffChars", async () => {
 			const watcher = new GitWatcher("/fake/path", config, stateDir);
 			await initWatcher(watcher);
+			// rev-parse --verify sha^ → succeeds (not a root commit)
+			mockGit.mockResolvedValueOnce("parent-sha");
 			const shortDiff = "diff --git a/file.ts\n+const x = 1;";
 			mockGit.mockResolvedValueOnce(shortDiff);
 			const result = await watcher.getDiff("sha1");
 			expect(result).toContain(shortDiff);
+		});
+
+		it("uses git show for root commit (no parent)", async () => {
+			const watcher = new GitWatcher("/fake/path", config, stateDir);
+			await initWatcher(watcher);
+			// rev-parse --verify sha^ → fails (root commit has no parent)
+			mockGit.mockRejectedValueOnce(new Error("fatal: ambiguous argument"));
+			const showOutput = "commit rootsha\nAuthor: user\n\n+initial file";
+			mockGit.mockResolvedValueOnce(showOutput);
+			const result = await watcher.getDiff("rootsha");
+			expect(result).toContain(showOutput);
 		});
 	});
 });
