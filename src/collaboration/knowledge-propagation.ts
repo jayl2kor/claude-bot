@@ -75,9 +75,10 @@ export async function propagateKnowledge(
 		const propagatedConfidence = entry.confidence * PROPAGATION_STRENGTH_FACTOR;
 		const now = Date.now();
 
-		// Upsert into target store with reduced confidence
+		// Upsert into target store with reduced confidence and propagated source
 		const propagatedEntry: KnowledgeEntry = {
 			...entry,
+			source: "propagated",
 			confidence: propagatedConfidence,
 			updatedAt: now,
 		};
