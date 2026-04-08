@@ -21,8 +21,14 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && apt-get update && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Claude CLI (pinned version for reproducibility)
-RUN npm install -g @anthropic-ai/claude-code@2.1.92
+# Install Claude CLI (native installer)
+RUN apt-get update && apt-get install -y --no-install-recommends bash \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL https://claude.ai/install.sh | bash
+ENV PATH="/root/.local/bin:$PATH"
+
+# Install Codex CLI
+RUN npm install -g @openai/codex
 
 # Pre-install Everything Claude Code plugin
 RUN mkdir -p /opt/claude-plugins && \
