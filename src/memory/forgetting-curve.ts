@@ -47,6 +47,8 @@ export function computeDecayedStrength(
 	baseStrength: number,
 	hoursElapsed: number,
 ): number {
+	if (baseStrength < 0) throw new Error("baseStrength must be >= 0");
+	if (hoursElapsed < 0) throw new Error("hoursElapsed must be >= 0");
 	return baseStrength * Math.exp(-DECAY_LAMBDA * hoursElapsed);
 }
 
@@ -59,6 +61,7 @@ export function computeDecayedStrength(
  * @returns Reinforced strength value, clamped to [0, 1].
  */
 export function computeReinforcedStrength(currentStrength: number): number {
+	if (currentStrength < 0) throw new Error("currentStrength must be >= 0");
 	return Math.min(1.0, currentStrength + REINFORCE_INCREMENT);
 }
 
@@ -70,5 +73,6 @@ export function computeReinforcedStrength(currentStrength: number): number {
  * @returns `true` if the memory is considered forgotten.
  */
 export function isForgotten(strength: number): boolean {
+	if (strength < 0) throw new Error("strength must be >= 0");
 	return strength <= FORGETTING_THRESHOLD;
 }

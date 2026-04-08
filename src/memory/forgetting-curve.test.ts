@@ -41,9 +41,8 @@ describe("ForgettingCurve — constants", () => {
 		expect(DECAY_LAMBDA).toBe(0.02);
 	});
 
-	it("REINFORCE_INCREMENT is positive and less than 1", () => {
-		expect(REINFORCE_INCREMENT).toBeGreaterThan(0);
-		expect(REINFORCE_INCREMENT).toBeLessThan(1);
+	it("REINFORCE_INCREMENT is exactly 0.15", () => {
+		expect(REINFORCE_INCREMENT).toBe(0.15);
 	});
 });
 
@@ -118,6 +117,14 @@ describe("computeDecayedStrength", () => {
 		const result = computeDecayedStrength(1.0, halfLife);
 		expect(result).toBeCloseTo(0.5, 3);
 	});
+
+	it("throws when baseStrength is negative", () => {
+		expect(() => computeDecayedStrength(-0.5, 6)).toThrow("baseStrength must be >= 0");
+	});
+
+	it("throws when hoursElapsed is negative", () => {
+		expect(() => computeDecayedStrength(1.0, -1)).toThrow("hoursElapsed must be >= 0");
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -168,6 +175,10 @@ describe("computeReinforcedStrength", () => {
 		}
 		expect(strength).toBe(1.0);
 	});
+
+	it("throws when currentStrength is negative", () => {
+		expect(() => computeReinforcedStrength(-0.1)).toThrow("currentStrength must be >= 0");
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -205,6 +216,10 @@ describe("isForgotten", () => {
 		const decayed = computeDecayedStrength(INITIAL_STRENGTH, 72);
 		// After 72h: ~0.237 which is above 0.1
 		expect(isForgotten(decayed)).toBe(false);
+	});
+
+	it("throws when strength is negative", () => {
+		expect(() => isForgotten(-0.1)).toThrow("strength must be >= 0");
 	});
 });
 
