@@ -7,6 +7,8 @@
  */
 
 import { readFile } from "node:fs/promises";
+import type { DelegationBuilder } from "../expertise/defer.js";
+import type { ExpertiseDocLoader } from "../expertise/loader.js";
 import type { ChatHistoryManager } from "../memory/history.js";
 import type { KnowledgeManager } from "../memory/knowledge.js";
 import type { PersonaManager } from "../memory/persona.js";
@@ -14,6 +16,10 @@ import type { ReflectionManager } from "../memory/reflection.js";
 import type { RelationshipManager } from "../memory/relationships.js";
 import type { ChannelChatMessage } from "../plugins/types.js";
 import type { StatusReader } from "../status/reader.js";
+import {
+	estimateTokens,
+	truncateToTokenBudget,
+} from "../utils/tokens.js";
 
 export type ContextBuilderDeps = {
 	persona: PersonaManager;
@@ -24,32 +30,11 @@ export type ContextBuilderDeps = {
 	statusReader?: StatusReader;
 	/** Path to a knowledge.md file with static knowledge for this pet. */
 	knowledgeFilePath?: string;
+	/** Expertise domain knowledge docs loader. */
+	expertiseDocLoader?: ExpertiseDocLoader;
+	/** Delegation builder for cross-pet topic routing. */
+	delegationBuilder?: DelegationBuilder;
 };
-
-/** Rough token estimate: ~4 chars per token for English, ~2 for Korean. */
-function estimateTokens(text: string): number {
-	const koreanChars = (text.match(/[\uAC00-\uD7AF]/g) ?? []).length;
-	const otherChars = text.length - koreanChars;
-	return Math.ceil(koreanChars / 2 + otherChars / 4);
-}
-
-/** Truncate text to fit within a token budget. */
-function truncateToTokenBudget(text: string, budget: number): string {
-	if (estimateTokens(text) <= budget) return text;
-
-	// Binary search for the right cutoff
-	let lo = 0;
-	let hi = text.length;
-	while (lo < hi) {
-		const mid = Math.ceil((lo + hi) / 2);
-		if (estimateTokens(text.slice(0, mid)) <= budget) {
-			lo = mid;
-		} else {
-			hi = mid - 1;
-		}
-	}
-	return `${text.slice(0, lo)}...`;
-}
 
 const TOKEN_BUDGETS = {
 	persona: 500,
@@ -87,6 +72,8 @@ export class ContextBuilder {
 			reflectionSection,
 			historyResults,
 			statusSection,
+			expertiseDocsSection,
+			delegationSection,
 		] = await Promise.all([
 			this.deps.persona.toPromptSection(),
 			this.deps.relationships.toPromptSection(userId),
@@ -96,6 +83,8 @@ export class ContextBuilder {
 			this.deps.reflections.toPromptSection(3),
 			historyPromise,
 			this.deps.statusReader?.toPromptSection() ?? Promise.resolve(null),
+			this.deps.expertiseDocLoader?.toPromptSection() ?? Promise.resolve(null),
+			this.deps.delegationBuilder?.toPromptSection() ?? Promise.resolve(null),
 		]);
 
 		const sections: string[] = [];
@@ -114,6 +103,16 @@ export class ContextBuilder {
 			} catch {
 				// File not found or unreadable — skip
 			}
+		}
+
+		// Expertise domain knowledge docs (2500 token budget, managed by loader)
+		if (expertiseDocsSection) {
+			sections.push(expertiseDocsSection);
+		}
+
+		// Delegation awareness (400 token budget, managed by builder)
+		if (delegationSection) {
+			sections.push(delegationSection);
 		}
 
 		if (relSection) {

@@ -14,6 +14,9 @@ import { ContextBuilder } from "../context/builder.js";
 import { createBuiltinJobs, createGitWatcherJob, createGrowthReportJob } from "../cron/jobs.js";
 import type { KnowledgeFeedDeps } from "../cron/jobs.js";
 import { CronService } from "../cron/service.js";
+import { DelegationBuilder } from "../expertise/defer.js";
+import { ExpertiseDocLoader } from "../expertise/loader.js";
+import { KnowledgeSeeder } from "../expertise/seeder.js";
 import { EvaluationPublisher } from "../evaluation/publisher.js";
 import { EvaluationStore } from "../evaluation/store.js";
 import { PeerEvaluator } from "../evaluation/evaluator.js";
@@ -114,13 +117,37 @@ export async function runDaemon(
 			resolve(DATA_DIR, "memory", "history"),
 		);
 
-		// 4. Initialize context builder (statusReader added after session manager)
+		// 4. Initialize expertise system
+		const CONFIG_DIR = configDir ?? resolve("config");
+		const expertiseDocLoader = new ExpertiseDocLoader(
+			resolve(CONFIG_DIR, "expertise"),
+		);
+
+		// Run knowledge seeder at boot
+		const seeder = new KnowledgeSeeder(
+			resolve(CONFIG_DIR, "seed-knowledge"),
+			DATA_DIR,
+			knowledge,
+		);
+		const seededCount = await seeder.seed();
+		if (seededCount > 0) {
+			logger.info("Knowledge seeder imported entries", {
+				count: seededCount,
+			});
+		}
+
+		// 5. Initialize context builder
 		const sharedStatusDir = config.daemon.sharedStatusDir
 			? resolve(config.daemon.sharedStatusDir)
 			: undefined;
 		const statusReader = sharedStatusDir
 			? new StatusReader(sharedStatusDir, config.persona.name)
 			: undefined;
+
+		const delegationBuilder = new DelegationBuilder(
+			config.expertise.deferTo,
+			statusReader,
+		);
 
 		// Resolve knowledge.md path from config directory
 		const knowledgeFilePath = configDir
@@ -135,6 +162,8 @@ export async function runDaemon(
 			reflections,
 			statusReader,
 			knowledgeFilePath,
+			expertiseDocLoader,
+			delegationBuilder,
 		});
 
 		// 5. Initialize session manager
@@ -222,14 +251,15 @@ export async function runDaemon(
 		);
 
 		// 8c. Initialize smart model selection (optional)
+		// ModelStatsTracker is only instantiated when smartModelSelection is enabled
+		// to avoid creating unnecessary directories when the feature is disabled.
 		const smsConfig = config.daemon.smartModelSelection;
-		const modelStatsTracker = new ModelStatsTracker(
-			resolve(DATA_DIR, "model-stats"),
-		);
 		const smartModelSelection = smsConfig.enabled
 			? {
 					enabled: true as const,
-					statsTracker: modelStatsTracker,
+					statsTracker: new ModelStatsTracker(
+						resolve(DATA_DIR, "model-stats"),
+					),
 					defaultModel: smsConfig.defaultModel,
 				}
 			: undefined;
@@ -349,6 +379,7 @@ export async function runDaemon(
 			knowledgeFeed: knowledgeFeedDeps,
 			evaluator: peerEvaluator,
 			plugins,
+			expertiseConfig: config.expertise,
 		})) {
 			cronService.add(job);
 		}

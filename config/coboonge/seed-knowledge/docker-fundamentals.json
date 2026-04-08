@@ -1,0 +1,32 @@
+[
+  {
+    "topic": "Docker image vs container",
+    "content": "Image is a read-only template with instructions for creating a container. A container is a runnable instance of an image. You can create multiple containers from the same image.",
+    "tags": ["docker", "fundamentals"],
+    "confidence": 0.95
+  },
+  {
+    "topic": "Docker volume types",
+    "content": "Docker supports three volume types: named volumes (managed by Docker), bind mounts (host path mapped), and tmpfs (in-memory only). Named volumes are preferred for production data persistence.",
+    "tags": ["docker", "volumes", "storage"],
+    "confidence": 0.9
+  },
+  {
+    "topic": "Docker networking basics",
+    "content": "Docker provides bridge (default, isolated), host (shares host network), and overlay (multi-host swarm) network drivers. Containers on the same bridge network can communicate by container name.",
+    "tags": ["docker", "networking"],
+    "confidence": 0.9
+  },
+  {
+    "topic": "Dockerfile COPY vs ADD",
+    "content": "COPY simply copies files from host to container. ADD has extra features: auto-extracting tar archives and fetching URLs. Best practice: always use COPY unless you specifically need ADD's extra features.",
+    "tags": ["docker", "dockerfile"],
+    "confidence": 0.95
+  },
+  {
+    "topic": "Docker health checks",
+    "content": "HEALTHCHECK instruction tells Docker how to test a container's health. Example: HEALTHCHECK --interval=30s CMD curl -f http://localhost:8080/health || exit 1. Compose can use depends_on with condition: service_healthy.",
+    "tags": ["docker", "healthcheck", "compose"],
+    "confidence": 0.9
+  }
+]
