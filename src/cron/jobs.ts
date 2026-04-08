@@ -340,11 +340,20 @@ async function runHistoryPrune(deps: CronJobDeps): Promise<void> {
 /**
  * Memory decay — apply Ebbinghaus forgetting curve to all knowledge entries
  * and archive entries that have decayed below the archive threshold.
+ *
+ * archiveWeak() is intentionally skipped when applyDecayAll() fails, to
+ * avoid archiving entries whose strength values were not yet updated (which
+ * would cause data loss).
  */
 async function runMemoryDecay(deps: CronJobDeps): Promise<void> {
-	await deps.knowledge.applyDecayAll();
-	const archived = await deps.knowledge.archiveWeak();
+	try {
+		await deps.knowledge.applyDecayAll();
+	} catch (err) {
+		logger.error("Memory decay (applyDecayAll) failed — skipping archiveWeak to prevent data loss", { err });
+		throw err;
+	}
 
+	const archived = await deps.knowledge.archiveWeak();
 	logger.info("Memory decay completed", { archived });
 }
 

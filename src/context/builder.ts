@@ -166,10 +166,13 @@ export class ContextBuilder {
 		// 8. Meta instructions
 		sections.push(buildMetaInstructions());
 
-		// 9. Fading knowledge review prompt
-		const reviewSection = await this.toReviewPromptSection();
-		if (reviewSection) {
-			sections.push(reviewSection);
+		// 9. Fading knowledge review prompt (only when there is a query — avoids
+		//    unnecessary I/O on system-prompt-only builds with no user message)
+		if (recentQuery) {
+			const reviewSection = await this.toReviewPromptSection();
+			if (reviewSection) {
+				sections.push(reviewSection);
+			}
 		}
 
 		return sections.join("\n\n");
