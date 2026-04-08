@@ -283,14 +283,21 @@ export class MessageRouter {
 			lastSentText = resultText;
 		}
 
-		if (status === "failed" && sentTexts.size === 0) {
+		if (status === "failed") {
 			const errHint = handle.lastStderr.slice(-3).join("\n");
 			logger.error("Session failed", { userId: msg.userId, stderr: errHint });
-			await plugin.sendMessage(
-				msg.channelId,
-				"미안, 응답을 생성하는 중에 문제가 생겼어.",
-				msg.id,
-			);
+			if (sentTexts.size === 0) {
+				await plugin.sendMessage(
+					msg.channelId,
+					"미안, 응답을 생성하는 중에 문제가 생겼어.",
+					msg.id,
+				);
+			} else {
+				await plugin.sendMessage(
+					msg.channelId,
+					"앗, 작업 중에 문제가 생겼습니다. 다시 시도해주세요.",
+				);
+			}
 		}
 
 		// Save bot response to history
