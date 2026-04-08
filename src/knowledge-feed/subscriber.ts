@@ -13,7 +13,6 @@ import type { KnowledgeManager } from "../memory/knowledge.js";
 import { isENOENT } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 import type { FeedStore } from "./feed-store.js";
-import type { FeedEntry } from "./types.js";
 
 export type SubscriberConfig = {
 	readonly feedStore: FeedStore;
@@ -84,16 +83,20 @@ export class FeedSubscriber {
 			}
 
 			// Import with reduced confidence
+			const now = Date.now();
 			const localEntry: KnowledgeEntry = {
 				id: randomUUID(),
 				topic: entry.topic,
 				content: entry.content,
 				source: "propagated",
 				propagatedFrom: entry.sourcePetId,
-				createdAt: Date.now(),
-				updatedAt: Date.now(),
+				createdAt: now,
+				updatedAt: now,
 				confidence: entry.confidence * this.confidenceMultiplier,
 				tags: [...entry.tags],
+				strength: 1.0,
+				lastReferencedAt: now,
+				referenceCount: 0,
 			};
 
 			await this.knowledge.upsert(localEntry);

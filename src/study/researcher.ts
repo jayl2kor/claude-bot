@@ -187,6 +187,9 @@ export class TopicResearcher {
 				createdAt: now,
 				confidence: 0.7,
 				tags: subtopic.tags,
+				strength: 1.0,
+				lastReferencedAt: now,
+				referenceCount: 0,
 			});
 			knowledgeIds.push(id);
 		}

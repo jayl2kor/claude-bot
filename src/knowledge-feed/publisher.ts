@@ -13,7 +13,13 @@ export type PublishableEntry = {
 	readonly topic: string;
 	readonly content: string;
 	readonly confidence: number;
-	readonly source: 'taught' | 'inferred' | 'corrected' | 'propagated';
+	readonly source:
+		| "taught"
+		| "inferred"
+		| "corrected"
+		| "propagated"
+		| "seeded"
+		| "self-studied";
 	readonly tags: readonly string[];
 };
 

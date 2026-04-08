@@ -13,9 +13,9 @@ import type { KnowledgeManager } from "../memory/knowledge.js";
 import { isENOENT } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 import {
+	type SeedKnowledgeEntry,
 	SeedKnowledgeEntrySchema,
 	SeedStateSchema,
-	type SeedKnowledgeEntry,
 } from "./types.js";
 
 export class KnowledgeSeeder {
@@ -51,9 +51,11 @@ export class KnowledgeSeeder {
 				content: entry.content,
 				source: "seeded",
 				createdAt: now,
-				updatedAt: now,
 				confidence: entry.confidence,
 				tags: [...new Set([...entry.tags, "seeded"])],
+				strength: 1.0,
+				lastReferencedAt: now,
+				referenceCount: 0,
 			});
 
 			existingHashes.add(hash);
