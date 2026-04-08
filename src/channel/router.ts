@@ -134,8 +134,12 @@ export class MessageRouter {
 			})
 			.catch(() => {});
 
-		// Show typing indicator
+		// Show typing indicator — repeat every 8s until session finishes
+		// (Discord typing indicator expires after 10s)
 		void plugin.sendTyping(msg.channelId).catch(() => {});
+		const typingInterval = setInterval(() => {
+			void plugin.sendTyping(msg.channelId).catch(() => {});
+		}, 8_000);
 
 		// Record relationship (fire and forget)
 		void this.deps.relationships.recordInteraction(msg.userId, msg.userName);
@@ -237,6 +241,7 @@ export class MessageRouter {
 		);
 
 		if (!handle) {
+			clearInterval(typingInterval);
 			await plugin.sendMessage(
 				msg.channelId,
 				"형님, 지금 다른 작업 처리 중이라 이건 못 하겠습니다. 잠시 후 다시 말씀해주십시오!",
@@ -268,6 +273,9 @@ export class MessageRouter {
 
 		// Wait for process to fully complete
 		const status = await handle.done;
+
+		// Stop typing indicator
+		clearInterval(typingInterval);
 
 		// If onText never fired, fall back to result text
 		if (sentTexts.size === 0 && status === "completed" && resultText) {
