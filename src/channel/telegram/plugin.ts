@@ -332,11 +332,15 @@ async function downloadTelegramFile(
 			file.file_size ?? fileSize,
 		);
 
+		// Store file_id as the url identifier instead of the token-bearing download URL
+		// to prevent bot token leakage in logs or stored attachment metadata.
+		const safeUrl = `tg-file://${fileId}`;
+
 		return {
 			filename,
 			mimeType,
 			size: file.file_size ?? fileSize,
-			url: fileUrl,
+			url: safeUrl,
 			...(result.ok ? { localPath: result.localPath } : {}),
 		};
 	} catch (err) {

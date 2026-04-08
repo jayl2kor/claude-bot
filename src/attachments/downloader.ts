@@ -9,7 +9,6 @@
 import { createWriteStream } from "node:fs";
 import { mkdir, unlink } from "node:fs/promises";
 import { join } from "node:path";
-import { Writable } from "node:stream";
 import { isAllowedMimeType } from "./types.js";
 
 export type DownloadSuccess = {
@@ -77,11 +76,13 @@ export class AttachmentDownloader {
 		const targetDir = join(uploadDir, dateDir);
 		const localPath = join(targetDir, `${Date.now()}-${safeName}`);
 
-		await mkdir(targetDir, { recursive: true });
-
 		// 4. Stream download with size enforcement
+		const controller = new AbortController();
+		const timer = setTimeout(() => controller.abort(), 30_000);
 		try {
-			const res = await fetch(url);
+			await mkdir(targetDir, { recursive: true });
+
+			const res = await fetch(url, { signal: controller.signal });
 			if (!res.ok) {
 				return {
 					ok: false,
@@ -113,6 +114,8 @@ export class AttachmentDownloader {
 				ok: false,
 				error: `Download failed: ${err instanceof Error ? err.message : String(err)}`,
 			};
+		} finally {
+			clearTimeout(timer);
 		}
 	}
 }
