@@ -11,5 +11,8 @@ knowledgeFeed:
 growthReport:
   enabled: true
   intervalMs: 604800000
+cronReport:
+  enabled: true
+  channelId: "1491529287415631985"
 collaboration:
   enabled: true
