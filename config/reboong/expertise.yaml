@@ -1,7 +1,12 @@
 domains:
-  - frontend
-  - react
-  - css
+  - code-review
+  - testing
+  - security
 decayMultiplier: 0.3
 deferTo:
-  backend: "꼬붕이"
+  backend: "코붕이"
+  frontend: "코붕이"
+  devops: "코붕이"
+  planning: "슈붕이"
+  ops: "옵붕이"
+  decision-making: "붕붕이"

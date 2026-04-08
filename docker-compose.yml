@@ -43,6 +43,46 @@ services:
       - ${CLAUDE_AUTH_PATH:-${HOME}/.claude}:/root/.claude
     command: ["--pet", "reboong"]
 
+  shuboong:
+    <<: *pet-base
+    env_file: .env.shuboong
+    volumes:
+      - ./config/shuboong:/app/config/shuboong:ro
+      - shuboong-data:/app/data/shuboong
+      - shuboong-workspace:/workspace
+      - shared-tasks:/app/data/shared/tasks
+      - shared-status:/app/data/shared/status
+      - shared-knowledge:/app/data/shared/knowledge-feed
+      - ${CLAUDE_AUTH_PATH:-${HOME}/.claude}:/root/.claude
+    command: ["--pet", "shuboong"]
+
+  boongboong:
+    <<: *pet-base
+    env_file: .env.boongboong
+    volumes:
+      - ./config/boongboong:/app/config/boongboong:ro
+      - boongboong-data:/app/data/boongboong
+      - boongboong-workspace:/workspace
+      - shared-tasks:/app/data/shared/tasks
+      - shared-status:/app/data/shared/status
+      - shared-knowledge:/app/data/shared/knowledge-feed
+      - ${CLAUDE_AUTH_PATH:-${HOME}/.claude}:/root/.claude
+    command: ["--pet", "boongboong"]
+
+  opboong:
+    <<: *pet-base
+    env_file: .env.opboong
+    volumes:
+      - ./config/opboong:/app/config/opboong:ro
+      - opboong-data:/app/data/opboong
+      - opboong-workspace:/workspace
+      - shared-tasks:/app/data/shared/tasks
+      - shared-status:/app/data/shared/status
+      - shared-knowledge:/app/data/shared/knowledge-feed
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${CLAUDE_AUTH_PATH:-${HOME}/.claude}:/root/.claude
+    command: ["--pet", "opboong"]
+
   dashboard:
     build:
       context: .
@@ -50,14 +90,20 @@ services:
     environment:
       DASHBOARD_PORT: "3000"
       SHARED_STATUS_DIR: /app/data/shared/status
-      PET_DATA_DIRS: /app/data/coboonge,/app/data/reboong
-      PET_CONFIG_DIRS: /app/config/coboonge,/app/config/reboong
+      PET_DATA_DIRS: /app/data/coboonge,/app/data/reboong,/app/data/shuboong,/app/data/opboong,/app/data/boongboong
+      PET_CONFIG_DIRS: /app/config/coboonge,/app/config/reboong,/app/config/shuboong,/app/config/opboong,/app/config/boongboong
     volumes:
       - coboonge-data:/app/data/coboonge:ro
       - reboong-data:/app/data/reboong:ro
+      - shuboong-data:/app/data/shuboong:ro
+      - opboong-data:/app/data/opboong:ro
+      - boongboong-data:/app/data/boongboong:ro
       - shared-status:/app/data/shared/status:ro
       - ./config/coboonge:/app/config/coboonge:ro
       - ./config/reboong:/app/config/reboong:ro
+      - ./config/shuboong:/app/config/shuboong:ro
+      - ./config/opboong:/app/config/opboong:ro
+      - ./config/boongboong:/app/config/boongboong:ro
     ports:
       - "${DASHBOARD_PORT:-3000}:3000"
     restart: unless-stopped
@@ -74,4 +120,10 @@ volumes:
   reboong-workspace:
   shared-tasks:
   shared-status:
+  shuboong-data:
+  shuboong-workspace:
+  boongboong-data:
+  boongboong-workspace:
+  opboong-data:
+  opboong-workspace:
   shared-knowledge:

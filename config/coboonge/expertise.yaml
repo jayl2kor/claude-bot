@@ -1,7 +1,12 @@
 domains:
   - backend
+  - frontend
   - devops
   - docker
+  - implementation
 decayMultiplier: 0.3
 deferTo:
-  frontend: "리붕이"
+  code-review: "리붕이"
+  planning: "슈붕이"
+  ops: "옵붕이"
+  decision-making: "붕붕이"
