@@ -77,6 +77,7 @@ export class SessionManager {
 		channelId: string,
 		prompt: string,
 		systemPrompt?: string,
+		model?: string,
 	): Promise<SessionHandle | null> {
 		const key = SessionManager.sessionKey(userId, channelId);
 
@@ -93,7 +94,7 @@ export class SessionManager {
 		const spawnOpts: SpawnOptions = {
 			prompt,
 			systemPrompt,
-			model: this.config.claudeModel,
+			model: model ?? this.config.claudeModel,
 			maxTurns: this.config.maxTurns,
 			cwd: this.config.workspacePath,
 			skipPermissions: this.config.skipPermissions,

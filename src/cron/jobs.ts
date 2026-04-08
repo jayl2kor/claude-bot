@@ -10,6 +10,8 @@
 import type { CollaborationManager } from "../collaboration/manager.js";
 import type { PeerEvaluator } from "../evaluation/evaluator.js";
 import { spawnClaude } from "../executor/spawner.js";
+import type { FeedStore } from "../knowledge-feed/feed-store.js";
+import type { FeedSubscriber } from "../knowledge-feed/subscriber.js";
 import { analyzeActivity } from "../memory/activity-analyzer.js";
 import type { ActivityTracker } from "../memory/activity.js";
 import type { ChatHistoryManager } from "../memory/history.js";
@@ -22,6 +24,13 @@ import type { SessionStore } from "../session/store.js";
 import { logger } from "../utils/logger.js";
 import type { CronJob } from "./service.js";
 
+export type KnowledgeFeedDeps = {
+	feedStore: FeedStore;
+	feedSubscriber: FeedSubscriber;
+	pollIntervalMs: number;
+	ttlMs: number;
+};
+
 export type CronJobDeps = {
 	persona: PersonaManager;
 	knowledge: KnowledgeManager;
@@ -31,6 +40,7 @@ export type CronJobDeps = {
 	activityTracker: ActivityTracker;
 	history: ChatHistoryManager;
 	collaboration?: CollaborationManager;
+	knowledgeFeed?: KnowledgeFeedDeps;
 	evaluator?: PeerEvaluator;
 	plugins: ChannelPlugin[];
 };
@@ -94,6 +104,22 @@ export function createBuiltinJobs(deps: CronJobDeps): CronJob[] {
 						intervalMs: 30 * 60 * 1000, // 30 minutes
 						runOnStart: false,
 						handler: () => deps.evaluator!.evaluatePending(),
+					},
+				]
+			: []),
+		...(deps.knowledgeFeed
+			? [
+					{
+						id: "knowledge-feed-poll",
+						intervalMs: deps.knowledgeFeed.pollIntervalMs,
+						runOnStart: false,
+						handler: () => runKnowledgeFeedPoll(deps.knowledgeFeed!),
+					},
+					{
+						id: "knowledge-feed-cleanup",
+						intervalMs: TWELVE_HOURS,
+						runOnStart: false,
+						handler: () => runKnowledgeFeedCleanup(deps.knowledgeFeed!),
 					},
 				]
 			: []),
@@ -335,6 +361,38 @@ async function runHistoryPrune(deps: CronJobDeps): Promise<void> {
 		logger.info("History prune completed", {
 			pruned: totalPruned,
 			channels: channels.length,
+		});
+	}
+}
+
+/**
+ * Knowledge feed poll — import new knowledge from other pets.
+ */
+async function runKnowledgeFeedPoll(deps: KnowledgeFeedDeps): Promise<void> {
+	const result = await deps.feedSubscriber.poll();
+	if (result.imported > 0 || result.skipped > 0) {
+		logger.info("Knowledge feed poll completed", {
+			imported: result.imported,
+			skipped: result.skipped,
+		});
+	}
+}
+
+/**
+ * Knowledge feed cleanup — remove feed entries older than TTL.
+ */
+async function runKnowledgeFeedCleanup(deps: KnowledgeFeedDeps): Promise<void> {
+	const expired = await deps.feedStore.findExpired(deps.ttlMs);
+	let removed = 0;
+
+	for (const entry of expired) {
+		await deps.feedStore.remove(entry.id);
+		removed++;
+	}
+
+	if (removed > 0) {
+		logger.info("Knowledge feed cleanup completed", {
+			removed,
 		});
 	}
 }
