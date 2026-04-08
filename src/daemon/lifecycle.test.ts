@@ -230,7 +230,7 @@ describe("runDaemon — Discord channel", () => {
 		});
 
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(createDiscordPlugin).toHaveBeenCalledTimes(1);
@@ -253,7 +253,7 @@ describe("runDaemon — Telegram channel", () => {
 		});
 
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(createTelegramPlugin).toHaveBeenCalledTimes(1);
@@ -288,7 +288,7 @@ describe("runDaemon — crash recovery pointer", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(readMock).toHaveBeenCalled();
@@ -311,7 +311,7 @@ describe("runDaemon — crash recovery pointer", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(readMock).toHaveBeenCalled();
@@ -335,7 +335,7 @@ describe("runDaemon — process lock", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(acquireMock).toHaveBeenCalledTimes(1);
@@ -392,7 +392,7 @@ describe("runDaemon — shutdown sequence", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(disconnectMock).toHaveBeenCalledTimes(1);
@@ -413,7 +413,7 @@ describe("runDaemon — shutdown sequence", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(shutdownMock).toHaveBeenCalledTimes(1);
@@ -434,7 +434,7 @@ describe("runDaemon — shutdown sequence", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(clearMock).toHaveBeenCalled();
@@ -473,7 +473,7 @@ describe("runDaemon — shutdown sequence", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		expect(order.indexOf("cron-stop")).toBeLessThan(order.indexOf("plugin-disconnect"));
@@ -496,7 +496,7 @@ describe("runDaemon — pointer refresh interval", () => {
 
 		const config = makeConfig({ channels: {} });
 		const runPromise = runDaemon(config, signal, dataDir);
-		abort();
+		abortNextTick(abort);
 		await runPromise;
 
 		// write() called at least once for initial pointer write

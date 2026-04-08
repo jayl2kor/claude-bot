@@ -41,6 +41,7 @@ export function createDiscordPlugin(
 			GatewayIntentBits.MessageContent,
 		],
 		partials: [Partials.Channel],
+		allowedMentions: { parse: ["roles", "users", "everyone"] },
 	});
 
 	let messageHandler: ((msg: IncomingMessage) => Promise<void>) | null = null;
