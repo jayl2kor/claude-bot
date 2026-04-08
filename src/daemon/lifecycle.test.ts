@@ -182,10 +182,10 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 			claudeModel: "sonnet",
 			maxTurns: 10,
 			skipPermissions: false,
-			collaboration: {
-				enabled: false,
-				role: "general",
-			},
+			git: { enabled: false, autoSync: false },
+			collaboration: { enabled: false, role: "general" },
+			smartModelSelection: { enabled: false, defaultModel: "sonnet" },
+			evaluation: { enabled: false, probability: 0.3, maxPendingCount: 5 },
 		},
 		...overrides,
 	};

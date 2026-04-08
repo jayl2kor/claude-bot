@@ -222,7 +222,11 @@ export async function runDaemon(
 			resolve(DATA_DIR, "model-stats"),
 		);
 		const smartModelSelection = smsConfig.enabled
-			? { enabled: true as const, statsTracker: modelStatsTracker }
+			? {
+					enabled: true as const,
+					statsTracker: modelStatsTracker,
+					defaultModel: smsConfig.defaultModel,
+				}
 			: undefined;
 
 		if (smsConfig.enabled) {
