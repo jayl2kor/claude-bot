@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GitReviewer } from "./reviewer.js";
 import type { GitCommitInfo } from "./types.js";
 
+
 vi.mock("../executor/spawner.js", () => ({
 	spawnClaude: vi.fn(),
 }));
@@ -102,6 +103,7 @@ describe("GitReviewer", () => {
 			expect(mockSpawnClaude.mock.calls[0][0].maxTurns).toBe(1);
 		});
 	});
+
 
 	describe("sendReview", () => {
 		it("sends formatted review to channel plugin", async () => {

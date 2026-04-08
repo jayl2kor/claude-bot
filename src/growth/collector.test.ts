@@ -67,6 +67,7 @@ function makePersonaManager(soul: Partial<PersonaSoul> = {}) {
 
 const NOW = Date.now();
 const ONE_DAY = 24 * 60 * 60 * 1000;
+const ONE_WEEK = 7 * ONE_DAY;
 
 function daysAgo(n: number): number {
 	return NOW - n * ONE_DAY;

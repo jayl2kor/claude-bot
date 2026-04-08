@@ -103,6 +103,12 @@ export function createBuiltinJobs(deps: CronJobDeps): CronJob[] {
 			handler: () => runActivityMonitor(deps),
 		},
 		{
+			id: "memory-decay",
+			intervalMs: SIX_HOURS,
+			runOnStart: false,
+			handler: () => runMemoryDecay(deps),
+		},
+		{
 			id: "history-prune",
 			intervalMs: TWENTY_FOUR_HOURS,
 			runOnStart: false,
@@ -411,7 +417,6 @@ async function runHistoryPrune(deps: CronJobDeps): Promise<void> {
 }
 
 /**
-HEAD
  * Upload cleanup — remove old date-based upload directories.
  */
 async function runUploadCleanup(
@@ -425,6 +430,25 @@ async function runUploadCleanup(
 }
 
 /**
+ * Memory decay — apply Ebbinghaus forgetting curve to all knowledge entries
+ * and archive entries that have decayed below the archive threshold.
+ *
+ * archiveWeak() is intentionally skipped when applyDecayAll() fails, to
+ * avoid archiving entries whose strength values were not yet updated (which
+ * would cause data loss).
+ */
+async function runMemoryDecay(deps: CronJobDeps): Promise<void> {
+	try {
+		await deps.knowledge.applyDecayAll();
+	} catch (err) {
+		logger.error("Memory decay (applyDecayAll) failed — skipping archiveWeak to prevent data loss", { err });
+		throw err;
+	}
+
+	const archived = await deps.knowledge.archiveWeak();
+	logger.info("Memory decay completed", { archived });
+}
+
 /**
  * Knowledge propagation — share high-confidence knowledge with peer pets.
  * Runs hourly when peerKnowledge stores are configured (Issue #6).
@@ -573,6 +597,10 @@ export type GitWatcherJobDeps = {
 	readonly pollIntervalMs: number;
 };
 
+/**
+ * Create a git-watcher cron job if the watcher is active.
+ * Returns null if the watcher is disabled or inactive.
+ */
 export function createGitWatcherJob(deps: GitWatcherJobDeps): CronJob | null {
 	if (!deps.watcher.isActive) return null;
 
@@ -584,6 +612,9 @@ export function createGitWatcherJob(deps: GitWatcherJobDeps): CronJob | null {
 	};
 }
 
+/**
+ * Git watcher — poll branches for new commits, generate reviews, send to channel.
+ */
 async function runGitWatcher(deps: GitWatcherJobDeps): Promise<void> {
 	const { watcher, reviewer, plugins } = deps;
 
@@ -619,4 +650,65 @@ async function runGitWatcher(deps: GitWatcherJobDeps): Promise<void> {
 	}
 
 	await watcher.persistState();
+}
+
+// ---------------------------------------------------------------------------
+// Growth report cron job
+// ---------------------------------------------------------------------------
+
+export type GrowthReportJobDeps = {
+	readonly growthReportConfig: GrowthReportConfig;
+	readonly collector: GrowthCollector;
+	readonly reporter: GrowthReporter;
+	readonly plugins: ChannelPlugin[];
+};
+
+/**
+ * Create a growth-report cron job if enabled in config.
+ * Returns null if the feature is disabled.
+ */
+export function createGrowthReportJob(
+	deps: GrowthReportJobDeps,
+): CronJob | null {
+	if (!deps.growthReportConfig.enabled) return null;
+
+	return {
+		id: "growth-report",
+		intervalMs: deps.growthReportConfig.intervalMs,
+		runOnStart: false,
+		handler: () => runGrowthReport(deps),
+	};
+}
+
+/**
+ * Growth report — aggregate stats and generate a persona-voice report.
+ */
+async function runGrowthReport(deps: GrowthReportJobDeps): Promise<void> {
+	const periodEnd = Date.now();
+	const periodStart = periodEnd - deps.growthReportConfig.intervalMs;
+
+	try {
+		const stats = await deps.collector.collect(periodStart, periodEnd);
+
+		const previousHistory = await deps.reporter.getLatestHistory();
+		const delta = GrowthCollector.computeDelta(stats, previousHistory);
+
+		const report = await deps.reporter.generateReport(stats, delta);
+
+		// Send to configured channel (or first available plugin)
+		const channelId = deps.growthReportConfig.channelId;
+		if (channelId && deps.plugins.length > 0) {
+			await deps.reporter.sendToChannel(report, deps.plugins[0], channelId);
+		}
+
+		await deps.reporter.saveHistory(report);
+
+		logger.info("Growth report job completed", {
+			reportId: report.id,
+			conversations: stats.conversations.totalCount,
+			knowledge: stats.knowledge.totalCount,
+		});
+	} catch (err) {
+		logger.error("Growth report job failed", { error: String(err) });
+	}
 }

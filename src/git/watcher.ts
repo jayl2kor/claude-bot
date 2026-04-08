@@ -1,5 +1,17 @@
 /**
  * GitWatcher — polls git log for new commits and manages rate limiting.
+ *
+ * Flow:
+ *   Cron (1min) -> git log <lastSHA>..HEAD
+ *              -> Filter new commits (exclude ignored authors)
+ *              -> Rate limit check
+ *              -> Pass to GitReviewer for Claude review
+ *              -> Persist SHA + timestamps
+ *
+ * Edge cases:
+ *   - force-push: SHA no longer exists -> reset to HEAD, skip review
+ *   - not a git repo: detect at init(), mark inactive
+ *   - large diff: truncate with stat summary
  */
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -33,6 +45,7 @@ export class GitWatcher {
 		return this.state;
 	}
 
+	/** Initialize: verify git repo and load persisted state. */
 	async init(): Promise<void> {
 		if (!this.config.enabled) {
 			logger.debug("GitWatcher disabled by config");
@@ -50,8 +63,10 @@ export class GitWatcher {
 			return;
 		}
 
+		// Load persisted state
 		await this.loadState();
 
+		// Initialize lastCheckedSha for configured branches if missing
 		for (const branch of this.config.branches) {
 			if (!this.state.lastCheckedSha[branch]) {
 				try {
@@ -78,6 +93,7 @@ export class GitWatcher {
 		});
 	}
 
+	/** Poll a branch for new commits since last checked SHA. */
 	async poll(branch: string): Promise<readonly GitCommitInfo[]> {
 		const lastSha = this.state.lastCheckedSha[branch];
 		if (!lastSha) return [];
@@ -91,6 +107,7 @@ export class GitWatcher {
 				"--reverse",
 			]);
 		} catch {
+			// Possible force-push: SHA no longer exists
 			logger.warn("GitWatcher: SHA no longer valid, resetting to HEAD", {
 				branch,
 				lastSha,
@@ -134,6 +151,7 @@ export class GitWatcher {
 					!this.config.ignoreAuthors.includes(c.author) && c.sha.length > 0,
 			);
 
+		// Update lastCheckedSha to the latest commit
 		if (commits.length > 0) {
 			const latestSha = commits[commits.length - 1].sha;
 			this.state = {
@@ -148,6 +166,7 @@ export class GitWatcher {
 		return commits;
 	}
 
+	/** Check if we have hit the rate limit for reviews this hour. */
 	isRateLimited(): boolean {
 		const now = Date.now();
 		const recentCount = this.state.reviewTimestamps.filter(
@@ -156,6 +175,7 @@ export class GitWatcher {
 		return recentCount >= this.config.maxReviewsPerHour;
 	}
 
+	/** Record a review timestamp. */
 	recordReview(timestamp: number = Date.now()): void {
 		this.state = {
 			...this.state,
@@ -163,6 +183,7 @@ export class GitWatcher {
 		};
 	}
 
+	/** Get the diff for a specific commit, truncated if necessary. */
 	async getDiff(sha: string): Promise<string> {
 		try {
 			const isRootCommit = await git(this.workspacePath, [
@@ -181,6 +202,7 @@ export class GitWatcher {
 				return diff;
 			}
 
+			// Truncated diff: include stat summary
 			const stat = isRootCommit
 				? diff
 				: await git(this.workspacePath, [
@@ -199,6 +221,7 @@ export class GitWatcher {
 		}
 	}
 
+	/** Persist current state to disk. */
 	async persistState(): Promise<void> {
 		try {
 			await mkdir(this.stateDir, { recursive: true });
@@ -211,6 +234,7 @@ export class GitWatcher {
 		}
 	}
 
+	/** Load state from disk. */
 	private async loadState(): Promise<void> {
 		try {
 			const filePath = join(this.stateDir, STATE_FILE);
@@ -228,6 +252,7 @@ export class GitWatcher {
 				this.state = defaultState();
 			}
 		} catch {
+			// File doesn't exist or corrupted — start fresh
 			this.state = defaultState();
 		}
 	}
