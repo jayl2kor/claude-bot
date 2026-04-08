@@ -28,6 +28,7 @@ services:
       - shared-status:/app/data/shared/status
       - shared-knowledge:/app/data/shared/knowledge-feed
       - ${CLAUDE_AUTH_PATH:-${HOME}/.claude}:/root/.claude
+      - ${HOME}/.config/gh:/root/.config/gh
     command: ["--pet", "coboonge"]
 
   reboong:
@@ -41,6 +42,7 @@ services:
       - shared-status:/app/data/shared/status
       - shared-knowledge:/app/data/shared/knowledge-feed
       - ${CLAUDE_AUTH_PATH:-${HOME}/.claude}:/root/.claude
+      - ${HOME}/.config/gh:/root/.config/gh
       - ${HOME}/.codex:/root/.codex
     command: ["--pet", "reboong"]
 
@@ -55,6 +57,7 @@ services:
       - shared-status:/app/data/shared/status
       - shared-knowledge:/app/data/shared/knowledge-feed
       - ${CLAUDE_AUTH_PATH:-${HOME}/.claude}:/root/.claude
+      - ${HOME}/.config/gh:/root/.config/gh
     command: ["--pet", "shuboong"]
 
   boongboong:
@@ -68,6 +71,7 @@ services:
       - shared-status:/app/data/shared/status
       - shared-knowledge:/app/data/shared/knowledge-feed
       - ${CLAUDE_AUTH_PATH:-${HOME}/.claude}:/root/.claude
+      - ${HOME}/.config/gh:/root/.config/gh
     command: ["--pet", "boongboong"]
 
   opboong:
@@ -82,6 +86,7 @@ services:
       - shared-knowledge:/app/data/shared/knowledge-feed
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ${CLAUDE_AUTH_PATH:-${HOME}/.claude}:/root/.claude
+      - ${HOME}/.config/gh:/root/.config/gh
     command: ["--pet", "opboong"]
 
   dashboard:
