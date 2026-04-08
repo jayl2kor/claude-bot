@@ -5,10 +5,13 @@
  * - soul-evolution: Analyze accumulated knowledge to evolve persona soul
  * - session-cleanup: Archive old session records
  * - proactive-message: Send a greeting or check-in (optional)
+ * - growth-report: Auto-generate periodic growth reports (optional)
  */
 
 import type { CollaborationManager } from "../collaboration/manager.js";
 import { spawnClaude } from "../executor/spawner.js";
+import { GrowthCollector } from "../growth/collector.js";
+import type { GrowthReporter } from "../growth/reporter.js";
 import { analyzeActivity } from "../memory/activity-analyzer.js";
 import type { ActivityTracker } from "../memory/activity.js";
 import type { ChatHistoryManager } from "../memory/history.js";
@@ -18,6 +21,7 @@ import type { ReflectionManager } from "../memory/reflection.js";
 import type { RelationshipManager } from "../memory/relationships.js";
 import type { ChannelPlugin } from "../plugins/types.js";
 import type { SessionStore } from "../session/store.js";
+import type { GrowthReportConfig } from "../utils/config.js";
 import { logger } from "../utils/logger.js";
 import type { CronJob } from "./service.js";
 
@@ -324,5 +328,66 @@ async function runHistoryPrune(deps: CronJobDeps): Promise<void> {
 			pruned: totalPruned,
 			channels: channels.length,
 		});
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Growth report cron job
+// ---------------------------------------------------------------------------
+
+export type GrowthReportJobDeps = {
+	readonly growthReportConfig: GrowthReportConfig;
+	readonly collector: GrowthCollector;
+	readonly reporter: GrowthReporter;
+	readonly plugins: ChannelPlugin[];
+};
+
+/**
+ * Create a growth-report cron job if enabled in config.
+ * Returns null if the feature is disabled.
+ */
+export function createGrowthReportJob(
+	deps: GrowthReportJobDeps,
+): CronJob | null {
+	if (!deps.growthReportConfig.enabled) return null;
+
+	return {
+		id: "growth-report",
+		intervalMs: deps.growthReportConfig.intervalMs,
+		runOnStart: false,
+		handler: () => runGrowthReport(deps),
+	};
+}
+
+/**
+ * Growth report — aggregate stats and generate a persona-voice report.
+ */
+async function runGrowthReport(deps: GrowthReportJobDeps): Promise<void> {
+	const periodEnd = Date.now();
+	const periodStart = periodEnd - deps.growthReportConfig.intervalMs;
+
+	try {
+		const stats = await deps.collector.collect(periodStart, periodEnd);
+
+		const previousHistory = await deps.reporter.getLatestHistory();
+		const delta = GrowthCollector.computeDelta(stats, previousHistory);
+
+		const report = await deps.reporter.generateReport(stats, delta);
+
+		// Send to configured channel (or first available plugin)
+		const channelId = deps.growthReportConfig.channelId;
+		if (channelId && deps.plugins.length > 0) {
+			await deps.reporter.sendToChannel(report, deps.plugins[0], channelId);
+		}
+
+		await deps.reporter.saveHistory(report);
+
+		logger.info("Growth report job completed", {
+			reportId: report.id,
+			conversations: stats.conversations.totalCount,
+			knowledge: stats.knowledge.totalCount,
+		});
+	} catch (err) {
+		logger.error("Growth report job failed", { error: String(err) });
 	}
 }

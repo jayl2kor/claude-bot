@@ -11,8 +11,11 @@ import { MessageRouter } from "../channel/router.js";
 import { createTelegramPlugin } from "../channel/telegram/plugin.js";
 import { CollaborationManager } from "../collaboration/manager.js";
 import { ContextBuilder } from "../context/builder.js";
-import { createBuiltinJobs } from "../cron/jobs.js";
+import { createBuiltinJobs, createGrowthReportJob } from "../cron/jobs.js";
 import { CronService } from "../cron/service.js";
+import { GrowthCollector } from "../growth/collector.js";
+import { FileReportHistoryStore } from "../growth/history-store.js";
+import { GrowthReporter } from "../growth/reporter.js";
 import { ActivityTracker } from "../memory/activity.js";
 import { ChatHistoryManager } from "../memory/history.js";
 import { KnowledgeManager } from "../memory/knowledge.js";
@@ -226,6 +229,41 @@ export async function runDaemon(
 				handler: () => statusWriter.write(),
 			});
 		}
+
+		// 11b. Growth report cron job (optional, disabled by default)
+		const growthReportConfig = config.daemon.growthReport;
+		if (growthReportConfig.enabled) {
+			const growthCollector = new GrowthCollector({
+				knowledge,
+				relationships,
+				reflections,
+				sessionStore,
+				activityTracker,
+				persona: personaManager,
+			});
+			const growthHistoryStore = new FileReportHistoryStore(
+				resolve(DATA_DIR, "memory", "growth-reports"),
+			);
+			const growthReporter = new GrowthReporter({
+				personaName: config.persona.name,
+				language: growthReportConfig.language,
+				historyStore: growthHistoryStore,
+			});
+			const growthJob = createGrowthReportJob({
+				growthReportConfig,
+				collector: growthCollector,
+				reporter: growthReporter,
+				plugins,
+			});
+			if (growthJob) {
+				cronService.add(growthJob);
+				logger.info("Growth report job registered", {
+					intervalMs: growthReportConfig.intervalMs,
+					channelId: growthReportConfig.channelId,
+				});
+			}
+		}
+
 		await cronService.start(signal);
 
 		// 11. Write initial pointer
