@@ -34,6 +34,11 @@ const GitConfigSchema = z.object({
 	autoSync: z.boolean().default(false),
 });
 
+const SmartModelSelectionSchema = z.object({
+	enabled: z.boolean().default(false),
+	defaultModel: z.enum(["haiku", "sonnet", "opus"]).default("sonnet"),
+});
+
 const CollaborationConfigSchema = z.object({
 	enabled: z.boolean().default(false),
 	role: z.string().default("general"),
@@ -51,6 +56,7 @@ const DaemonConfigSchema = z.object({
 	sharedStatusDir: z.string().optional(),
 	git: GitConfigSchema.default({}),
 	collaboration: CollaborationConfigSchema.default({}),
+	smartModelSelection: SmartModelSelectionSchema.default({}),
 });
 
 export const AppConfigSchema = z.object({
