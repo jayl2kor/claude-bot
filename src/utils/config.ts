@@ -34,6 +34,13 @@ const GitConfigSchema = z.object({
 	autoSync: z.boolean().default(false),
 });
 
+const GrowthReportConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	intervalMs: z.number().default(7 * 24 * 60 * 60 * 1000), // weekly
+	channelId: z.string().optional(),
+	language: z.string().default("ko"),
+});
+
 const SmartModelSelectionSchema = z.object({
 	enabled: z.boolean().default(false),
 	defaultModel: z.enum(["haiku", "sonnet", "opus"]).default("sonnet"),
@@ -82,6 +89,7 @@ const DaemonConfigSchema = z.object({
 	git: GitConfigSchema.default({}),
 	gitWatcher: GitWatcherConfigSchema.default({}),
 	collaboration: CollaborationConfigSchema.default({}),
+	growthReport: GrowthReportConfigSchema.default({}),
 	smartModelSelection: SmartModelSelectionSchema.default({}),
 	knowledgeFeed: KnowledgeFeedConfigSchema.default({}),
 	evaluation: EvaluationConfigSchema.default({}),
@@ -95,6 +103,7 @@ export const AppConfigSchema = z.object({
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
 export type PersonaConfig = z.infer<typeof PersonaConfigSchema>;
+export type GrowthReportConfig = z.infer<typeof GrowthReportConfigSchema>;
 export type GitWatcherConfig = z.infer<typeof GitWatcherConfigSchema>;
 
 /**
