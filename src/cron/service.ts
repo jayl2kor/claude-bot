@@ -23,6 +23,7 @@ type JobState = {
 	timer: ReturnType<typeof setTimeout> | null;
 	lastRunAt: number;
 	running: boolean;
+	runningStartedAt?: number;
 };
 
 export type CronReporter = (
@@ -30,6 +31,9 @@ export type CronReporter = (
 	summary: string,
 	durationMs: number,
 ) => Promise<void>;
+
+const RETRY_BACKOFF_MS = [60_000, 5 * 60_000, 15 * 60_000] as const; // 1min, 5min, 15min
+const STALE_JOB_TIMEOUT_MS = 30 * 60_000; // 30 minutes
 
 export class CronService {
 	private readonly jobs = new Map<string, JobState>();
@@ -60,16 +64,23 @@ export class CronService {
 		this.started = true;
 		logger.info("Cron service starting", { jobCount: this.jobs.size });
 
+		// Collect runOnStart promises with random stagger, all in parallel
+		const runOnStartPromises: Promise<void>[] = [];
 		for (const [, state] of this.jobs) {
 			if (state.job.runOnStart) {
-				// Stagger immediate runs to avoid thundering herd
 				const stagger = Math.random() * 2000;
-				await sleep(stagger, signal);
-				if (signal.aborted) return;
-				void this.runJob(state);
+				runOnStartPromises.push(
+					sleep(stagger, signal).then(() => {
+						if (signal.aborted) return;
+						void this.runJobWithRetry(state);
+					}),
+				);
 			}
 			this.scheduleNext(state, signal);
 		}
+
+		// Fire all staggered starts in parallel (don't await job completion)
+		void Promise.all(runOnStartPromises);
 
 		logger.info("Cron service started");
 	}
@@ -108,20 +119,69 @@ export class CronService {
 		}
 	}
 
-	/** Manually trigger a job. */
+	/** Manually trigger a job (with retry). */
 	async run(id: string): Promise<void> {
 		const state = this.jobs.get(id);
 		if (!state) {
 			logger.warn("Cron job not found", { id });
 			return;
 		}
-		await this.runJob(state);
+		await this.runJobWithRetry(state);
 	}
 
-	private async runJob(state: JobState): Promise<void> {
+	private scheduleNext(
+		state: JobState,
+		signal: AbortSignal,
+		startMs?: number,
+	): void {
+		if (!this.started || signal.aborted) return;
+
+		// Fix interval drift: account for time already elapsed since job started.
+		// Without this, actual interval = configured interval + job duration.
+		const elapsed = startMs !== undefined ? Date.now() - startMs : 0;
+		const delay = Math.max(0, state.job.intervalMs - elapsed);
+
+		state.timer = setTimeout(() => {
+			if (signal.aborted) return;
+			const jobStart = Date.now();
+			void this.runJobWithRetry(state).then(() => {
+				this.scheduleNext(state, signal, jobStart);
+			});
+		}, delay);
+	}
+
+	private async runJobWithRetry(state: JobState): Promise<void> {
+		const MAX_ATTEMPTS = 3;
+
+		for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+			const succeeded = await this.runJobOnce(state);
+			if (succeeded) return;
+
+			if (attempt < MAX_ATTEMPTS - 1) {
+				const backoff = RETRY_BACKOFF_MS[attempt] ?? 60_000;
+				logger.warn("Cron job failed, retrying with backoff", {
+					id: state.job.id,
+					attempt: attempt + 1,
+					backoffMs: backoff,
+				});
+				await sleep(backoff);
+			}
+		}
+
+		logger.error("Cron job exhausted all retries, waiting for next interval", {
+			id: state.job.id,
+			attempts: MAX_ATTEMPTS,
+		});
+	}
+
+	/**
+	 * Run the job once, returning true on success and false on failure.
+	 * Guards against concurrent execution.
+	 */
+	private async runJobOnce(state: JobState): Promise<boolean> {
 		if (state.running) {
 			logger.debug("Cron job already running, skipping", { id: state.job.id });
-			return;
+			return true; // treat as "success" to avoid spurious retries
 		}
 
 		state.running = true;
@@ -143,25 +203,16 @@ export class CronService {
 					});
 				});
 			}
+			return true;
 		} catch (err) {
 			logger.error("Cron job failed", {
 				id: state.job.id,
 				error: String(err),
 				durationMs: Date.now() - startMs,
 			});
+			return false;
 		} finally {
 			state.running = false;
 		}
-	}
-
-	private scheduleNext(state: JobState, signal: AbortSignal): void {
-		if (!this.started || signal.aborted) return;
-
-		state.timer = setTimeout(() => {
-			if (signal.aborted) return;
-			void this.runJob(state).then(() => {
-				this.scheduleNext(state, signal);
-			});
-		}, state.job.intervalMs);
 	}
 }
