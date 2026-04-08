@@ -23,6 +23,7 @@ const KnowledgeEntrySchema = z.object({
 	content: z.string(),
 	source: z.enum(["taught", "inferred", "corrected", "propagated"]),
 	taughtBy: z.string().optional(),
+	propagatedFrom: z.string().optional(),
 	createdAt: z.number(),
 	updatedAt: z.number(),
 	confidence: z.number().min(0).max(1).default(0.8),
@@ -186,6 +187,15 @@ export class KnowledgeManager {
 	async listAll(): Promise<KnowledgeEntry[]> {
 		const entries = await this.store.readAll();
 		return entries.map((e) => e.value);
+	}
+
+	/** Find entries with a similar topic (case-insensitive exact match). */
+	async findByTopic(topic: string): Promise<KnowledgeEntry[]> {
+		const all = await this.store.readAll();
+		const topicLower = topic.toLowerCase().trim();
+		return all
+			.map((e) => e.value)
+			.filter((e) => e.topic.toLowerCase().trim() === topicLower);
 	}
 
 	/**

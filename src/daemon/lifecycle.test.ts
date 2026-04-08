@@ -74,6 +74,22 @@ vi.mock("../cron/jobs.js", () => ({
 	createGrowthReportJob: vi.fn(() => null),
 }));
 
+vi.mock("../knowledge-feed/feed-store.js", () => ({
+	FeedStore: vi.fn().mockImplementation(() => ({})),
+}));
+
+vi.mock("../knowledge-feed/publisher.js", () => ({
+	FeedPublisher: vi.fn().mockImplementation(() => ({
+		publish: vi.fn(async () => null),
+	})),
+}));
+
+vi.mock("../knowledge-feed/subscriber.js", () => ({
+	FeedSubscriber: vi.fn().mockImplementation(() => ({
+		poll: vi.fn(async () => ({ imported: 0, skipped: 0 })),
+	})),
+}));
+
 vi.mock("../cron/service.js", () => ({
 	CronService: vi.fn().mockImplementation(() => ({
 		add: vi.fn(),
@@ -216,7 +232,8 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 			},
 			collaboration: { enabled: false, role: "general" },
 			growthReport: { enabled: false, intervalMs: 604800000, language: "ko" },
-			evaluation: { enabled: false },
+			smartModelSelection: { enabled: false, defaultModel: "sonnet" },
+			evaluation: { enabled: false, probability: 0.3, maxPendingCount: 5 },
 		},
 		...overrides,
 	};

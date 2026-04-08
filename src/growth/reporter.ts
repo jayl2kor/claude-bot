@@ -49,7 +49,9 @@ export class GrowthReporter {
 		const handle = spawnClaude({ prompt, model: "haiku", maxTurns: 1 });
 		let reportText = "";
 		handle.onResult((r) => {
-			reportText = r.result;
+			if (!r.is_error) {
+				reportText = r.result;
+			}
 		});
 		await handle.done;
 
@@ -127,8 +129,8 @@ function buildReportPrompt(
 	const sections = [
 		`너는 "${personaName}"이라는 AI 펫이야.`,
 		`아래 통계를 바탕으로 ${language === "ko" ? "한국어로" : "in English"} 성장 리포트를 작성해줘.`,
-		`네 성격과 말투를 살려서 자연스럽고 재밌게 써줘.`,
-		`마크다운 형식으로 작성해줘.`,
+		"네 성격과 말투를 살려서 자연스럽고 재밌게 써줘.",
+		"마크다운 형식으로 작성해줘.",
 		"",
 		`## 기간: ${periodStart} ~ ${periodEnd}`,
 		"",

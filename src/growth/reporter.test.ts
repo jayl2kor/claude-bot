@@ -3,10 +3,9 @@
  * - Report generation (calls Claude haiku)
  * - Channel sending
  * - Report history save and load
- * - Disabled config skips execution
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { GrowthReporter } from "./reporter.js";
 import type { GrowthDelta, GrowthStats, ReportHistory } from "./types.js";
 

@@ -289,10 +289,11 @@ describe("GrowthCollector.computeDelta", () => {
 			previous,
 		);
 
-		expect(delta.conversationsDelta).toBe(10); // 30 - 20
-		expect(delta.uniqueUsersDelta).toBe(2); // 5 - 3
-		expect(delta.knowledgeDelta).toBe(4); // 9 - 5
-		expect(delta.newRelationshipsDelta).toBe(0); // 2 - 2
+		expect(delta).not.toBeNull();
+		expect(delta?.conversationsDelta).toBe(10); // 30 - 20
+		expect(delta?.uniqueUsersDelta).toBe(2); // 5 - 3
+		expect(delta?.knowledgeDelta).toBe(4); // 9 - 5
+		expect(delta?.newRelationshipsDelta).toBe(0); // 2 - 2
 	});
 
 	it("returns null when no previous report exists", () => {
