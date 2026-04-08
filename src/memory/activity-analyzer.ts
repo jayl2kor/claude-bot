@@ -23,7 +23,8 @@ export function analyzeActivity(
 	now: number = Date.now(),
 ): ActivityAnalysis {
 	const currentHour = new Date(now).getHours();
-	const isLateNight = currentHour >= LATE_NIGHT_START && currentHour < LATE_NIGHT_END;
+	const isLateNight =
+		currentHour >= LATE_NIGHT_START && currentHour < LATE_NIGHT_END;
 
 	const sessionDurationMinutes = record.sessionStartAt
 		? Math.floor((now - record.sessionStartAt) / 60_000)

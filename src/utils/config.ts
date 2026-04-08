@@ -34,6 +34,23 @@ const GitConfigSchema = z.object({
 	autoSync: z.boolean().default(false),
 });
 
+const GrowthReportConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	intervalMs: z.number().default(7 * 24 * 60 * 60 * 1000), // weekly
+	channelId: z.string().optional(),
+	language: z.string().default("ko"),
+});
+
+const GitWatcherConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	branches: z.array(z.string()).default(["main"]),
+	pollIntervalMs: z.number().default(60_000),
+	maxReviewsPerHour: z.number().default(5),
+	ignoreAuthors: z.array(z.string()).default([]),
+	reviewChannelId: z.string().default(""),
+	maxDiffChars: z.number().default(4000),
+});
+
 const CollaborationConfigSchema = z.object({
 	enabled: z.boolean().default(false),
 	role: z.string().default("general"),
@@ -50,7 +67,9 @@ const DaemonConfigSchema = z.object({
 	workspacePath: z.string().optional(),
 	sharedStatusDir: z.string().optional(),
 	git: GitConfigSchema.default({}),
+	gitWatcher: GitWatcherConfigSchema.default({}),
 	collaboration: CollaborationConfigSchema.default({}),
+	growthReport: GrowthReportConfigSchema.default({}),
 });
 
 export const AppConfigSchema = z.object({
@@ -61,6 +80,8 @@ export const AppConfigSchema = z.object({
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
 export type PersonaConfig = z.infer<typeof PersonaConfigSchema>;
+export type GitWatcherConfig = z.infer<typeof GitWatcherConfigSchema>;
+export type GrowthReportConfig = z.infer<typeof GrowthReportConfigSchema>;
 
 /**
  * Load .env file into process.env, then load YAML config with env substitution.

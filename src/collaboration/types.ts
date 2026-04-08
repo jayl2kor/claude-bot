@@ -3,7 +3,12 @@
  * Shared via filesystem (data/shared/tasks/).
  */
 
-export type TaskStatus = "pending" | "assigned" | "in_progress" | "completed" | "failed";
+export type TaskStatus =
+	| "pending"
+	| "assigned"
+	| "in_progress"
+	| "completed"
+	| "failed";
 
 export type CollaborationTask = {
 	id: string;

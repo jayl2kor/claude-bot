@@ -7,7 +7,10 @@ import { FileMemoryStore } from "./store.js";
 
 const ActivityRecordSchema = z.object({
 	userId: z.string(),
-	hourlyDistribution: z.array(z.number()).length(24).default(Array(24).fill(0) as number[]),
+	hourlyDistribution: z
+		.array(z.number())
+		.length(24)
+		.default(Array(24).fill(0) as number[]),
 	sessionStartAt: z.number().nullable().default(null),
 	lastActivityAt: z.number().default(0),
 	lastAlertAt: z.number().default(0),
@@ -38,7 +41,8 @@ export class ActivityTracker {
 			lastActivityAt: timestamp,
 			sessionStartAt: existing.sessionStartAt ?? timestamp,
 			// Reset daily alert counter
-			alertsToday: existing.alertsResetDate === today ? existing.alertsToday : 0,
+			alertsToday:
+				existing.alertsResetDate === today ? existing.alertsToday : 0,
 			alertsResetDate: today,
 		};
 

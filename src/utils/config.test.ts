@@ -7,10 +7,10 @@
  * - Empty/invalid token channel stripping
  */
 
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppConfigSchema, loadConfig } from "./config.js";
 
@@ -275,7 +275,7 @@ describe("loadConfig", () => {
 	it("strips surrounding quotes from .env values", async () => {
 		await writeFile(
 			envFile,
-			'QUOTED_MODEL="claude-sonnet"\nSINGLE_MODEL=\'haiku\'\n',
+			"QUOTED_MODEL=\"claude-sonnet\"\nSINGLE_MODEL='haiku'\n",
 			"utf8",
 		);
 		await writeFile(
@@ -313,8 +313,7 @@ describe("loadConfig", () => {
 		await makeConfigDir(configDir, {
 			"persona.yaml": "name: MultiBot\ntone: formal\n",
 			"daemon.yaml": "maxConcurrentSessions: 7\n",
-			"channels.yaml":
-				"discord:\n  token: multi-token\n  respondTo: both\n",
+			"channels.yaml": "discord:\n  token: multi-token\n  respondTo: both\n",
 		});
 		const config = await loadConfig(configDir, envFile);
 		expect(config.persona.name).toBe("MultiBot");

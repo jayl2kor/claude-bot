@@ -30,8 +30,8 @@ export function detectCollaboration(
 	botMentionIds: string[],
 ): CollabDetection {
 	// Count how many different bots are mentioned
-	const mentionedPets = botMentionIds.filter((id) =>
-		content.includes(`<@${id}>`) || content.includes(`<@!${id}>`),
+	const mentionedPets = botMentionIds.filter(
+		(id) => content.includes(`<@${id}>`) || content.includes(`<@!${id}>`),
 	);
 
 	// Multiple bots mentioned

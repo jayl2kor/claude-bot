@@ -9,10 +9,10 @@
  * All heavy dependencies are mocked to keep tests unit-level.
  */
 
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
+import { mkdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -58,6 +58,7 @@ vi.mock("../channel/telegram/plugin.js", () => ({
 vi.mock("../channel/router.js", () => ({
 	MessageRouter: vi.fn().mockImplementation(() => ({
 		start: vi.fn(),
+		startCommands: vi.fn(async () => {}),
 	})),
 }));
 
@@ -69,6 +70,8 @@ vi.mock("../context/builder.js", () => ({
 
 vi.mock("../cron/jobs.js", () => ({
 	createBuiltinJobs: vi.fn(() => []),
+	createGitWatcherJob: vi.fn(() => null),
+	createGrowthReportJob: vi.fn(() => null),
 }));
 
 vi.mock("../cron/service.js", () => ({
@@ -118,6 +121,42 @@ vi.mock("../teaching/integrator.js", () => ({
 	})),
 }));
 
+vi.mock("../git/watcher.js", () => ({
+	GitWatcher: vi.fn().mockImplementation(() => ({
+		init: vi.fn(async () => {}),
+		poll: vi.fn(async () => []),
+		getDiff: vi.fn(async () => ""),
+	})),
+}));
+
+vi.mock("../git/reviewer.js", () => ({
+	GitReviewer: vi.fn().mockImplementation(() => ({
+		review: vi.fn(async () => ""),
+	})),
+}));
+
+vi.mock("../growth/collector.js", () => ({
+	GrowthCollector: vi.fn().mockImplementation(() => ({
+		collect: vi.fn(async () => ({})),
+	})),
+}));
+
+vi.mock("../growth/history-store.js", () => ({
+	FileReportHistoryStore: vi.fn().mockImplementation(() => ({
+		save: vi.fn(async () => {}),
+		getLatest: vi.fn(async () => null),
+	})),
+}));
+
+vi.mock("../growth/reporter.js", () => ({
+	GrowthReporter: vi.fn().mockImplementation(() => ({
+		generateReport: vi.fn(async () => ({ reportText: "" })),
+		sendToChannel: vi.fn(async () => {}),
+		saveHistory: vi.fn(async () => {}),
+		getLatestHistory: vi.fn(async () => null),
+	})),
+}));
+
 vi.mock("../utils/sleep.js", () => ({
 	sleep: vi.fn(async () => {}),
 }));
@@ -141,8 +180,8 @@ vi.mock("./pointer.js", () => ({
 // Import after mocks
 // ---------------------------------------------------------------------------
 
-import { runDaemon } from "./lifecycle.js";
 import type { AppConfig } from "../utils/config.js";
+import { runDaemon } from "./lifecycle.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -164,6 +203,19 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 			pointerRefreshMs: 300_000,
 			claudeModel: "sonnet",
 			maxTurns: 10,
+			skipPermissions: false,
+			git: { enabled: false, autoSync: false },
+			gitWatcher: {
+				enabled: false,
+				branches: ["main"],
+				pollIntervalMs: 60_000,
+				maxReviewsPerHour: 5,
+				ignoreAuthors: [],
+				reviewChannelId: "",
+				maxDiffChars: 4000,
+			},
+			collaboration: { enabled: false, role: "general" },
+			growthReport: { enabled: false, intervalMs: 604800000, language: "ko" },
 		},
 		...overrides,
 	};
@@ -203,7 +255,9 @@ describe("runDaemon — CLI fallback", () => {
 
 describe("runDaemon — Discord channel", () => {
 	it("initializes discord plugin when discord config present", async () => {
-		const { createDiscordPlugin } = await import("../channel/discord/plugin.js");
+		const { createDiscordPlugin } = await import(
+			"../channel/discord/plugin.js"
+		);
 		const { createCliPlugin } = await import("../channel/cli/plugin.js");
 		vi.mocked(createDiscordPlugin).mockClear();
 		vi.mocked(createCliPlugin).mockClear();
@@ -226,7 +280,9 @@ describe("runDaemon — Discord channel", () => {
 
 describe("runDaemon — Telegram channel", () => {
 	it("initializes telegram plugin when telegram config present", async () => {
-		const { createTelegramPlugin } = await import("../channel/telegram/plugin.js");
+		const { createTelegramPlugin } = await import(
+			"../channel/telegram/plugin.js"
+		);
 		const { createCliPlugin } = await import("../channel/cli/plugin.js");
 		vi.mocked(createTelegramPlugin).mockClear();
 		vi.mocked(createCliPlugin).mockClear();
@@ -252,9 +308,7 @@ describe("runDaemon — crash recovery pointer", () => {
 		const { PointerManager } = await import("./pointer.js");
 
 		const existingPointer = {
-			activeSessions: [
-				{ sessionKey: "u1:c1", channelId: "c1", userId: "u1" },
-			],
+			activeSessions: [{ sessionKey: "u1:c1", channelId: "c1", userId: "u1" }],
 			startedAt: Date.now() - 5000,
 			pid: 99999,
 		};
@@ -352,7 +406,9 @@ describe("runDaemon — process lock", () => {
 
 		const config = makeConfig({ channels: {} });
 
-		await expect(runDaemon(config, signal, dataDir)).rejects.toThrow("write error");
+		await expect(runDaemon(config, signal, dataDir)).rejects.toThrow(
+			"write error",
+		);
 		expect(releaseMock).toHaveBeenCalledTimes(1);
 	});
 });
@@ -462,7 +518,9 @@ describe("runDaemon — shutdown sequence", () => {
 		abort();
 		await runPromise;
 
-		expect(order.indexOf("cron-stop")).toBeLessThan(order.indexOf("plugin-disconnect"));
+		expect(order.indexOf("cron-stop")).toBeLessThan(
+			order.indexOf("plugin-disconnect"),
+		);
 	});
 });
 
