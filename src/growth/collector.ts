@@ -67,7 +67,7 @@ export class GrowthCollector {
 		);
 
 		const uniqueUserIds = new Set(
-			periodSessions.map((s) => s?.userId).filter(Boolean),
+			periodSessions.flatMap((s) => (s?.userId ? [s.userId] : [])),
 		);
 
 		// New relationships: firstSeen within period
