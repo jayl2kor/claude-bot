@@ -11,6 +11,7 @@
 import type { CollaborationManager } from "../collaboration/manager.js";
 import type { PeerEvaluator } from "../evaluation/evaluator.js";
 import { spawnClaude } from "../executor/spawner.js";
+import type { ExpertiseConfig } from "../expertise/types.js";
 import { GrowthCollector } from "../growth/collector.js";
 import type { GrowthReporter } from "../growth/reporter.js";
 import type { FeedStore } from "../knowledge-feed/feed-store.js";
@@ -47,6 +48,7 @@ export type CronJobDeps = {
 	knowledgeFeed?: KnowledgeFeedDeps;
 	evaluator?: PeerEvaluator;
 	plugins: ChannelPlugin[];
+	expertiseConfig?: ExpertiseConfig;
 };
 
 const SIX_HOURS = 6 * 60 * 60 * 1000;
