@@ -24,7 +24,7 @@ jobs:
 
       - name: Run Biome lint
         run: npm run lint
-        continue-on-error: true  # 단계적 도입: baseline 정리 완료 후 제거 예정
+        continue-on-error: true  # TODO(#54): baseline 정리 완료 후 제거
 
   typecheck:
     name: Type Check
@@ -43,7 +43,7 @@ jobs:
 
       - name: TypeScript type check
         run: npm run typecheck
-        continue-on-error: true  # 단계적 도입: baseline 정리 완료 후 제거 예정
+        continue-on-error: true  # TODO(#54): baseline 정리 완료 후 제거
 
   test:
     name: Unit Tests
