@@ -11,6 +11,11 @@
  * - scratchpad: short-lived (TTL-based), immediate storage
  * - working: mid-term, promoted from scratchpad
  * - long-term: durable, verified knowledge
+ *
+ * Conflict-aware knowledge storage (Issue #43):
+ * - supersedes: new entry replaces an older one (old entry preserved as history)
+ * - refutes: new entry contradicts an older one (both preserved)
+ * - canonical chain prioritises highest confidence + most recent superseder
  */
 
 import { z } from "zod";
@@ -50,6 +55,41 @@ export type TierStats = {
 	total: number;
 };
 
+// -----------------------------------------------------------------------
+// Conflict-aware types (Issue #43)
+// -----------------------------------------------------------------------
+
+/** Relation type between knowledge entries. */
+export type KnowledgeRelationType = "supersedes" | "refutes";
+
+/** A directed relation from one knowledge entry to another. */
+export type KnowledgeRelation = {
+	/** The type of relation. */
+	type: KnowledgeRelationType;
+	/** ID of the related entry (the one being superseded or refuted). */
+	targetId: string;
+	/** Human-readable rationale for the relation. */
+	rationale: string;
+	/** Timestamp (ms) when the relation was established. */
+	createdAt: number;
+};
+
+/** Result of a conflict detection scan. */
+export type ConflictDetectionResult = {
+	/** IDs of existing entries that conflict with the new entry. */
+	conflictingIds: string[];
+	/** Suggested relation types for each conflicting entry. */
+	suggestedRelations: Array<{ targetId: string; type: KnowledgeRelationType }>;
+};
+
+/** Result of getCanonical query. */
+export type CanonicalResult = {
+	/** The best (canonical) entry for the topic. */
+	canonical: KnowledgeEntry;
+	/** All related historical entries (superseded / refuted). */
+	history: KnowledgeEntry[];
+};
+
 /**
  * Compute the promotion score for a knowledge entry.
  * promotionScore = referenceCount * 0.4 + confidence * 0.4 + (strength > 0.7 ? 0.2 : 0)
@@ -61,6 +101,13 @@ function computePromotionScore(
 ): number {
 	return referenceCount * 0.4 + confidence * 0.4 + (strength > 0.7 ? 0.2 : 0);
 }
+
+const KnowledgeRelationSchema = z.object({
+	type: z.enum(["supersedes", "refutes"]),
+	targetId: z.string(),
+	rationale: z.string(),
+	createdAt: z.number(),
+});
 
 const KnowledgeEntrySchema = z.object({
 	id: z.string(),
@@ -90,6 +137,20 @@ const KnowledgeEntrySchema = z.object({
 	promotionScore: z.number().default(0),
 	/** Custom TTL (ms) for scratchpad entries. Defaults to DEFAULT_SCRATCHPAD_TTL_MS if not set. */
 	scratchpadTtlMs: z.number().optional(),
+	// -----------------------------------------------------------------------
+	// Conflict-aware fields (Issue #43)
+	// -----------------------------------------------------------------------
+	/**
+	 * Relations this entry has to other entries.
+	 * supersedes: this entry replaces the target.
+	 * refutes: this entry contradicts the target.
+	 */
+	relations: z.array(KnowledgeRelationSchema).optional().default([]),
+	/**
+	 * Whether this entry has been superseded by a newer entry.
+	 * Superseded entries are preserved for history but excluded from canonical results.
+	 */
+	supersededBy: z.string().optional(),
 });
 
 export type KnowledgeEntry = z.output<typeof KnowledgeEntrySchema>;
@@ -117,12 +178,13 @@ export class KnowledgeManager {
 
 	/** Store a new knowledge entry or update existing one. */
 	async upsert(
-		entry: Omit<KnowledgeEntry, "updatedAt" | "tier" | "tierCreatedAt" | "promotionScore"> &
-			Partial<Pick<KnowledgeEntry, "tier" | "tierCreatedAt" | "promotionScore">>,
+		entry: Omit<KnowledgeEntry, "updatedAt" | "tier" | "tierCreatedAt" | "promotionScore" | "relations" | "supersededBy"> &
+			Partial<Pick<KnowledgeEntry, "tier" | "tierCreatedAt" | "promotionScore" | "relations" | "supersededBy">>,
 	): Promise<void> {
 		const now = Date.now();
 		const withTimestamp: KnowledgeEntry = {
 			tier: "scratchpad",
+			relations: [],
 			...entry,
 			updatedAt: now,
 			tierCreatedAt: entry.tierCreatedAt ?? now,
@@ -244,7 +306,9 @@ export class KnowledgeManager {
 			.slice(0, limit);
 	}
 
-	/** Search knowledge by keyword matching with tier-priority weighting. */
+	/** Search knowledge by keyword matching with tier-priority weighting.
+	 * Excludes entries that have been superseded by a newer entry.
+	 */
 	async search(query: string, limit = 10): Promise<KnowledgeEntry[]> {
 		const all = await this.store.readAll();
 		const queryLower = query.toLowerCase();
@@ -256,7 +320,10 @@ export class KnowledgeManager {
 			}))
 			.filter(
 				({ score, entry }) =>
-					score > 0 && entry.strength >= DEPRIORITIZE_THRESHOLD,
+					score > 0 &&
+					entry.strength >= DEPRIORITIZE_THRESHOLD &&
+					// Exclude superseded entries from canonical search results
+					!entry.supersededBy,
 			)
 			.sort((a, b) => b.score - a.score)
 			.slice(0, limit);
@@ -450,6 +517,7 @@ export class KnowledgeManager {
 	/**
 	 * Format relevant knowledge for prompt injection.
 	 * Returns { text, entryIds } so the caller can fire-and-forget reinforce.
+	 * Excludes entries that have been superseded.
 	 */
 	async toPromptSection(
 		query: string,
@@ -472,6 +540,190 @@ export class KnowledgeManager {
 
 		return { text: lines.join("\n"), entryIds };
 	}
+
+	// -------------------------------------------------------------------------
+	// Conflict-aware knowledge storage (Issue #43)
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Detect conflicts between a new entry's topic/content and existing entries.
+	 * Uses topic exact-match and Jaccard similarity to find candidates.
+	 * Returns conflicting IDs and suggested relation types.
+	 */
+	async detectConflicts(
+		topic: string,
+		content: string,
+	): Promise<ConflictDetectionResult> {
+		const topicMatches = await this.findByTopic(topic);
+		const conflictingIds: string[] = [];
+		const suggestedRelations: Array<{ targetId: string; type: KnowledgeRelationType }> = [];
+
+		for (const existing of topicMatches) {
+			// Skip already-superseded entries — they are history, not active knowledge
+			if (existing.supersededBy) continue;
+
+			const sim = jaccardSimilarity(existing.content, content);
+			// High similarity but different content → supersedes (updated info)
+			// Low similarity on same topic → refutes (contradictory claim)
+			if (sim >= 0.3) {
+				conflictingIds.push(existing.id);
+				suggestedRelations.push({ targetId: existing.id, type: "supersedes" });
+			} else if (sim < 0.3) {
+				conflictingIds.push(existing.id);
+				suggestedRelations.push({ targetId: existing.id, type: "refutes" });
+			}
+		}
+
+		return { conflictingIds, suggestedRelations };
+	}
+
+	/**
+	 * Store a knowledge entry with an explicit relation to an existing entry.
+	 * If relationType is "supersedes", the target entry is marked as supersededBy this entry.
+	 * Both entries are preserved in the store (original history is never deleted).
+	 * Logs a conflict detection/resolution event.
+	 */
+	async saveWithRelation(
+		entry: Omit<KnowledgeEntry, "updatedAt" | "tier" | "tierCreatedAt" | "promotionScore" | "relations" | "supersededBy"> &
+			Partial<Pick<KnowledgeEntry, "tier" | "tierCreatedAt" | "promotionScore" | "relations" | "supersededBy">>,
+		relation: KnowledgeRelation,
+	): Promise<void> {
+		const now = Date.now();
+
+		// Build the new entry with the relation
+		const newEntry: KnowledgeEntry = {
+			tier: "scratchpad",
+			...entry,
+			updatedAt: now,
+			tierCreatedAt: entry.tierCreatedAt ?? now,
+			promotionScore: computePromotionScore(
+				entry.referenceCount,
+				entry.confidence,
+				entry.strength,
+			),
+			relations: [...(entry.relations ?? []), relation],
+		};
+		await this.store.write(entry.id, newEntry);
+
+		// If supersedes, mark the target as superseded (but keep it for history)
+		if (relation.type === "supersedes") {
+			const target = await this.store.read(relation.targetId);
+			if (target) {
+				const updatedTarget: KnowledgeEntry = {
+					...target,
+					supersededBy: entry.id,
+					updatedAt: now,
+				};
+				await this.store.write(relation.targetId, updatedTarget);
+				logger.info("Knowledge conflict resolved: supersedes", {
+					newId: entry.id,
+					targetId: relation.targetId,
+					topic: entry.topic,
+					rationale: relation.rationale,
+				});
+			}
+		} else {
+			// refutes — log without marking superseded (both remain active)
+			logger.info("Knowledge conflict detected: refutes", {
+				newId: entry.id,
+				targetId: relation.targetId,
+				topic: entry.topic,
+				rationale: relation.rationale,
+			});
+		}
+	}
+
+	/**
+	 * Get the canonical (most current/authoritative) entry for a topic,
+	 * plus the historical chain of superseded/refuted entries.
+	 *
+	 * Canonical selection:
+	 * 1. Exclude entries that have been superseded by a newer entry.
+	 * 2. Among remaining, prefer highest confidence, then most recent createdAt.
+	 *
+	 * Returns null if no entries exist for the topic.
+	 */
+	async getCanonical(topic: string): Promise<CanonicalResult | null> {
+		const all = await this.findByTopic(topic);
+		if (all.length === 0) return null;
+
+		// Partition into active (not superseded) and historical
+		const active = all.filter((e) => !e.supersededBy);
+		const historical = all.filter((e) => !!e.supersededBy);
+
+		if (active.length === 0) {
+			// All superseded — return the most recently updated one as canonical
+			const sorted = [...all].sort((a, b) => b.updatedAt - a.updatedAt);
+			return { canonical: sorted[0]!, history: sorted.slice(1) };
+		}
+
+		// Sort active by confidence desc, then createdAt desc
+		const sorted = [...active].sort(
+			(a, b) => b.confidence - a.confidence || b.createdAt - a.createdAt,
+		);
+
+		return {
+			canonical: sorted[0]!,
+			history: [...sorted.slice(1), ...historical],
+		};
+	}
+
+	/**
+	 * Detect conflicts and auto-save with appropriate relations.
+	 * This is the main entry point for conflict-aware storage.
+	 *
+	 * If conflicts are found:
+	 * - Logs a conflict-detection event
+	 * - Stores the new entry linked to existing entries via relations
+	 * - Marks superseded entries accordingly
+	 *
+	 * If no conflicts, falls back to plain upsert.
+	 *
+	 * @returns The stored entry.
+	 */
+	async upsertWithConflictDetection(
+		entry: Omit<KnowledgeEntry, "updatedAt" | "tier" | "tierCreatedAt" | "promotionScore" | "relations" | "supersededBy"> &
+			Partial<Pick<KnowledgeEntry, "tier" | "tierCreatedAt" | "promotionScore" | "relations" | "supersededBy">>,
+	): Promise<{ entry: KnowledgeEntry; conflictsFound: number }> {
+		const detection = await this.detectConflicts(entry.topic, entry.content);
+
+		if (detection.conflictingIds.length === 0) {
+			await this.upsert(entry);
+			const stored = await this.store.read(entry.id);
+			return { entry: stored!, conflictsFound: 0 };
+		}
+
+		// Log the conflict detection event
+		logger.info("Knowledge conflict detection event", {
+			newId: entry.id,
+			topic: entry.topic,
+			conflictingIds: detection.conflictingIds,
+			suggestedRelations: detection.suggestedRelations,
+		});
+
+		// Build relations for all conflicts
+		const now = Date.now();
+		const relations: KnowledgeRelation[] = detection.suggestedRelations.map(
+			({ targetId, type }) => ({
+				type,
+				targetId,
+				rationale: `Auto-detected: new entry ${type} existing entry on topic "${entry.topic}"`,
+				createdAt: now,
+			}),
+		);
+
+		// Save with the first relation; remaining relations are embedded in the entry
+		const firstRelation = relations[0]!;
+		const additionalRelations = relations.slice(1);
+
+		await this.saveWithRelation(
+			{ ...entry, relations: [...(entry.relations ?? []), ...additionalRelations] },
+			firstRelation,
+		);
+
+		const stored = await this.store.read(entry.id);
+		return { entry: stored!, conflictsFound: detection.conflictingIds.length };
+	}
 }
 
 /** Render a visual strength bar: ████░░ */
@@ -479,6 +731,17 @@ function renderStrengthBar(strength: number): string {
 	const filled = Math.round(strength * 6);
 	const empty = 6 - filled;
 	return `[강도: ${"█".repeat(filled)}${"░".repeat(empty)}]`;
+}
+
+/**
+ * Compute Jaccard similarity between two strings (word-level).
+ */
+function jaccardSimilarity(a: string, b: string): number {
+	const wordsA = new Set(a.toLowerCase().split(/\s+/).filter(Boolean));
+	const wordsB = new Set(b.toLowerCase().split(/\s+/).filter(Boolean));
+	const intersection = [...wordsA].filter((w) => wordsB.has(w)).length;
+	const union = new Set([...wordsA, ...wordsB]).size;
+	return union === 0 ? 0 : intersection / union;
 }
 
 /**

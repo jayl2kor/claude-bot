@@ -100,6 +100,7 @@ export class FeedSubscriber {
 				tier: "scratchpad",
 				tierCreatedAt: now,
 				promotionScore: 0,
+				relations: [],
 			};
 
 			await this.knowledge.upsert(localEntry);
