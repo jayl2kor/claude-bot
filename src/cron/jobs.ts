@@ -8,6 +8,7 @@
  * - growth-report: Auto-generate periodic growth reports (optional)
  */
 
+import { randomUUID } from "node:crypto";
 import { cleanOldUploads } from "../attachments/cleanup.js";
 import { propagateKnowledge } from "../collaboration/knowledge-propagation.js";
 import type { CollaborationManager } from "../collaboration/manager.js";
@@ -72,6 +73,8 @@ export type CronJobDeps = {
 	prReview?: PRReviewConfig;
 	/** PR response config for responding to reviews on my PRs. */
 	prResponse?: PRReviewConfig;
+	/** Whether to skip interactive permission/safety checks in spawned Claude processes. */
+	skipPermissions: boolean;
 };
 
 const ONE_HOUR = 60 * 60 * 1000;
@@ -229,7 +232,12 @@ async function runMemoryReflection(deps: CronJobDeps): Promise<string | void> {
 		summaries,
 	].join("\n");
 
-	const handle = spawnClaude({ prompt, model: "haiku", maxTurns: 1 });
+	const handle = spawnClaude({
+		prompt,
+		model: "haiku",
+		maxTurns: 1,
+		skipPermissions: deps.skipPermissions,
+	});
 	let result = "";
 	handle.onResult((r) => {
 		result = r.text;
@@ -238,7 +246,54 @@ async function runMemoryReflection(deps: CronJobDeps): Promise<string | void> {
 
 	if (result) {
 		logger.info("Memory reflection completed", { resultLength: result.length });
-		return `기억 회고 완료! ${recent.length}개의 대화를 분석했어요.`;
+
+		try {
+			const jsonMatch = result.match(/\{[\s\S]*\}/);
+			if (jsonMatch) {
+				const parsed = JSON.parse(jsonMatch[0]) as {
+					commonThemes?: string[];
+					patterns?: string[];
+					growth?: string;
+				};
+
+				// Save each extracted insight as a knowledge item
+				const now = Date.now();
+				const insightsToSave: Array<{ topic: string; content: string }> = [];
+
+				for (const theme of parsed.commonThemes ?? []) {
+					insightsToSave.push({ topic: "common-theme", content: theme });
+				}
+				for (const pattern of parsed.patterns ?? []) {
+					insightsToSave.push({ topic: "conversation-pattern", content: pattern });
+				}
+				if (parsed.growth) {
+					insightsToSave.push({ topic: "growth-point", content: parsed.growth });
+				}
+
+				for (const insight of insightsToSave) {
+					await deps.knowledge.upsert({
+						id: randomUUID(),
+						topic: insight.topic,
+						content: insight.content,
+						source: "inferred",
+						createdAt: now,
+						confidence: 0.7,
+						tags: ["memory-reflection"],
+						strength: 1.0,
+						lastReferencedAt: now,
+						referenceCount: 0,
+					});
+				}
+
+				logger.info("Memory reflection insights saved", {
+					themes: parsed.commonThemes?.length ?? 0,
+					patterns: parsed.patterns?.length ?? 0,
+					growth: !!parsed.growth,
+				});
+			}
+		} catch (err) {
+			logger.warn("Memory reflection parse failed", { error: String(err) });
+		}
 	}
 }
 
@@ -282,7 +337,12 @@ async function runSoulEvolution(deps: CronJobDeps): Promise<string | void> {
 		relationshipSummary,
 	].join("\n");
 
-	const handle = spawnClaude({ prompt, model: "haiku", maxTurns: 1 });
+	const handle = spawnClaude({
+		prompt,
+		model: "haiku",
+		maxTurns: 1,
+		skipPermissions: deps.skipPermissions,
+	});
 	let result = "";
 	handle.onResult((r) => {
 		result = r.text;

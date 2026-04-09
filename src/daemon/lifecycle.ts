@@ -421,6 +421,7 @@ export async function runDaemon(
 			expertiseConfig: config.expertise,
 			uploadDir,
 			attachmentRetentionDays: attachmentConfig.retentionDays,
+			skipPermissions: true,
 			prReview: config.daemon.prReview.enabled
 				? {
 						enabled: true,
