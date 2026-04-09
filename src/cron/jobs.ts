@@ -27,6 +27,8 @@ import type { ReflectionManager } from "../memory/reflection.js";
 import type { RelationshipManager } from "../memory/relationships.js";
 import type { ChannelPlugin } from "../plugins/types.js";
 import type { SessionStore } from "../session/store.js";
+import { BatchIntegrator } from "../teaching/batch-integrator.js";
+import type { StagingQueue } from "../teaching/staging-queue.js";
 import type { GrowthReportConfig } from "../utils/config.js";
 import { logger } from "../utils/logger.js";
 import {
@@ -72,6 +74,11 @@ export type CronJobDeps = {
 	prReview?: PRReviewConfig;
 	/** PR response config for responding to reviews on my PRs. */
 	prResponse?: PRReviewConfig;
+	/**
+	 * Staging queue for two-stage learning pipeline (Issue #41).
+	 * When provided, the batch-integration cron job is registered.
+	 */
+	stagingQueue?: StagingQueue;
 };
 
 const ONE_HOUR = 60 * 60 * 1000;
@@ -206,6 +213,16 @@ export function createBuiltinJobs(deps: CronJobDeps): CronJob[] {
 						intervalMs: deps.prResponse.pollIntervalMs,
 						runOnStart: false,
 						handler: () => runPRResponse(deps.prResponse!),
+					},
+				]
+			: []),
+		...(deps.stagingQueue
+			? [
+					{
+						id: "batch-integration",
+						intervalMs: ONE_HOUR,
+						runOnStart: false,
+						handler: () => runBatchIntegration(deps),
 					},
 				]
 			: []),
@@ -623,6 +640,40 @@ async function runKnowledgeFeedCleanup(
 		});
 		return `지식 피드 정리 완료! 만료된 항목 ${removed}개를 삭제했어요.`;
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Batch integration cron job (Issue #41 — two-stage learning pipeline)
+// ---------------------------------------------------------------------------
+
+/**
+ * Batch integration — Stage 2 of the two-stage learning pipeline.
+ * Reads staged items, applies write gate, promotes approved items to knowledge store.
+ * Runs every hour when a staging queue is configured.
+ */
+async function runBatchIntegration(deps: CronJobDeps): Promise<string | void> {
+	if (!deps.stagingQueue) return;
+
+	const integrator = new BatchIntegrator(deps.stagingQueue, deps.knowledge);
+	const result = await integrator.run();
+
+	if (result.processed === 0) return;
+
+	logger.info("Batch integration completed", {
+		processed: result.processed,
+		approved: result.approved,
+		held: result.held,
+		rejected: result.rejected,
+		deduplicated: result.deduplicated,
+	});
+
+	const parts: string[] = [];
+	if (result.approved > 0) parts.push(`승인 ${result.approved}개`);
+	if (result.held > 0) parts.push(`보류 ${result.held}개`);
+	if (result.rejected > 0) parts.push(`거절 ${result.rejected}개`);
+	if (result.deduplicated > 0) parts.push(`중복 ${result.deduplicated}개`);
+
+	return `배치 통합 완료! ${result.processed}개 처리: ${parts.join(", ")}`;
 }
 
 // ---------------------------------------------------------------------------
