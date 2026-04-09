@@ -1,8 +1,13 @@
 /**
  * Knowledge extractor — converts detected teaching into structured knowledge.
  *
- * For explicit and correction intents, extracts topic + content directly.
- * For preference intents, routes to relationship manager instead.
+ * Two-stage pipeline (Issue #41):
+ * - If a StagingQueue is provided, items are written to the staging queue for
+ *   batch processing by BatchIntegrator (recommended path).
+ * - Without a staging queue (legacy), items are stored directly in the
+ *   knowledge store (original behaviour, kept for backward compatibility).
+ *
+ * For preference intents, routes to relationship manager instead of knowledge.
  */
 
 import { randomUUID } from "node:crypto";
@@ -12,10 +17,13 @@ import type { KnowledgeManager } from "../memory/knowledge.js";
 import type { RelationshipManager } from "../memory/relationships.js";
 import { logger } from "../utils/logger.js";
 import type { TeachingIntent } from "./detector.js";
+import type { StagingQueue } from "./staging-queue.js";
 
 export type ExtractionResult = {
 	stored: number;
 	skipped: number;
+	/** Number of items enqueued to the staging queue (two-stage pipeline). */
+	staged: number;
 	entries: KnowledgeEntry[];
 };
 
@@ -24,12 +32,92 @@ export class KnowledgeExtractor {
 		private readonly knowledge: KnowledgeManager,
 		private readonly relationships: RelationshipManager,
 		private readonly feedPublisher?: FeedPublisher,
+		/** Optional staging queue for the two-stage pipeline (Issue #41). */
+		private readonly stagingQueue?: StagingQueue,
 	) {}
 
 	/**
-	 * Process detected teaching intents and store as knowledge/preferences.
+	 * Process detected teaching intents.
+	 *
+	 * Two-stage mode (stagingQueue provided):
+	 *   - Preferences go to relationship manager immediately.
+	 *   - All other intents are enqueued in the staging queue.
+	 *   - Returns staged count; knowledge store is NOT written yet.
+	 *
+	 * Legacy mode (no stagingQueue):
+	 *   - Original behaviour: intents written directly to knowledge store.
 	 */
 	async extract(
+		intents: TeachingIntent[],
+		userId: string,
+		sessionKey?: string,
+	): Promise<ExtractionResult> {
+		if (this.stagingQueue) {
+			return this.extractToStaging(intents, userId, sessionKey ?? "");
+		}
+		return this.extractDirect(intents, userId);
+	}
+
+	// -------------------------------------------------------------------------
+	// Two-stage path: enqueue to staging queue
+	// -------------------------------------------------------------------------
+
+	private async extractToStaging(
+		intents: TeachingIntent[],
+		userId: string,
+		sessionKey: string,
+	): Promise<ExtractionResult> {
+		let staged = 0;
+		let skipped = 0;
+		const entries: KnowledgeEntry[] = [];
+
+		for (const intent of intents) {
+			if (intent.confidence < 0.5) {
+				skipped++;
+				continue;
+			}
+
+			if (intent.type === "preference") {
+				// Preferences still go directly to relationship manager
+				await this.relationships.addPreference(userId, intent.payload);
+				logger.info("Preference stored (staging path)", {
+					userId,
+					payload: intent.payload,
+				});
+				staged++;
+				continue;
+			}
+
+			// Enqueue to staging queue — no heavy integration here
+			await this.stagingQueue!.enqueue({
+				id: randomUUID(),
+				sessionKey,
+				userId,
+				type: intent.type,
+				payload: intent.payload,
+				confidence: intent.confidence,
+				extractedAt: Date.now(),
+				retryCount: 0,
+				status: "pending",
+			});
+
+			logger.info("Knowledge enqueued to staging queue", {
+				sessionKey,
+				type: intent.type,
+				payload: intent.payload.slice(0, 80),
+			});
+
+			staged++;
+		}
+
+		return { stored: 0, skipped, staged, entries };
+	}
+
+	// -------------------------------------------------------------------------
+	// Legacy path: write directly to knowledge store
+	// -------------------------------------------------------------------------
+
+	private async extractDirect(
 		intents: TeachingIntent[],
 		userId: string,
 	): Promise<ExtractionResult> {
@@ -119,11 +207,10 @@ export class KnowledgeExtractor {
 				});
 			}
 
-
 			stored++;
 		}
 
-		return { stored, skipped, entries };
+		return { stored, skipped, staged: 0, entries };
 	}
 }
 
