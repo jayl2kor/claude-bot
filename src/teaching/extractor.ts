@@ -99,14 +99,16 @@ export class KnowledgeExtractor {
 				tier: "scratchpad",
 				tierCreatedAt: now,
 				promotionScore: 0,
+				relations: [],
 			};
 
-			await this.knowledge.upsert(entry);
+			const { conflictsFound } = await this.knowledge.upsertWithConflictDetection(entry);
 			entries.push(entry);
 			logger.info("Knowledge stored", {
 				topic,
 				id: entry.id,
 				source: entry.source,
+				conflictsFound,
 			});
 
 			// Publish to shared feed for cross-pet propagation
