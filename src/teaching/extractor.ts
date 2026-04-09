@@ -96,6 +96,9 @@ export class KnowledgeExtractor {
 				strength: 1.0,
 				lastReferencedAt: now,
 				referenceCount: 0,
+				tier: "scratchpad",
+				tierCreatedAt: now,
+				promotionScore: 0,
 			};
 
 			await this.knowledge.upsert(entry);

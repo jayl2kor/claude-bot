@@ -121,6 +121,12 @@ export function createBuiltinJobs(deps: CronJobDeps): CronJob[] {
 			handler: () => runMemoryDecay(deps),
 		},
 		{
+			id: "memory-tier-maintenance",
+			intervalMs: ONE_HOUR,
+			runOnStart: false,
+			handler: () => runMemoryTierMaintenance(deps),
+		},
+		{
 			id: "history-prune",
 			intervalMs: TWENTY_FOUR_HOURS,
 			runOnStart: false,
@@ -536,6 +542,47 @@ async function runMemoryDecay(deps: CronJobDeps): Promise<string | void> {
 	logger.info("Memory decay completed", { archived });
 	if (archived > 0) {
 		return `기억 감쇠 처리 완료! 약해진 기억 ${archived}개를 보관함으로 옮겼어요.`;
+	}
+}
+
+/**
+ * Memory tier maintenance — expire stale scratchpad entries and promote
+ * eligible entries to higher tiers. Runs every hour (Issue #42).
+ *
+ * Promotion rules:
+ *   scratchpad → working: referenceCount >= 2 OR confidence >= 0.85
+ *   working → long-term:  referenceCount >= 5 AND confidence >= 0.8
+ *
+ * Logs tier statistics after each run for observability.
+ */
+async function runMemoryTierMaintenance(
+	deps: CronJobDeps,
+): Promise<string | void> {
+	const { expired, scratchpadToWorking, workingToLongTerm } =
+		await deps.knowledge.runTierMaintenance();
+
+	const stats = await deps.knowledge.getTierStats();
+	logger.info("Memory tier maintenance completed", {
+		expired,
+		scratchpadToWorking,
+		workingToLongTerm,
+		stats,
+	});
+
+	const parts: string[] = [];
+	if (expired > 0) parts.push(`만료 ${expired}개`);
+	if (scratchpadToWorking > 0) parts.push(`scratchpad→working ${scratchpadToWorking}개`);
+	if (workingToLongTerm > 0) parts.push(`working→long-term ${workingToLongTerm}개`);
+
+	logger.info("Memory tier stats", {
+		scratchpad: stats.scratchpad,
+		working: stats.working,
+		longTerm: stats.longTerm,
+		total: stats.total,
+	});
+
+	if (parts.length > 0) {
+		return `메모리 계층 정리 완료! ${parts.join(", ")} (전체: scratchpad ${stats.scratchpad}, working ${stats.working}, long-term ${stats.longTerm})`;
 	}
 }
 

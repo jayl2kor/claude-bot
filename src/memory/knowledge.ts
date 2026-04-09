@@ -6,6 +6,11 @@
  * - strength field tracks knowledge retention (0..1)
  * - Decays over time, reinforced on reference
  * - Weak entries archived to cold storage
+ *
+ * Memory tiering (Issue #42):
+ * - scratchpad: short-lived (TTL-based), immediate storage
+ * - working: mid-term, promoted from scratchpad
+ * - long-term: durable, verified knowledge
  */
 
 import { z } from "zod";
@@ -16,9 +21,46 @@ import {
 	computeReinforcedStrength,
 } from "./decay.js";
 import { FileMemoryStore } from "./store.js";
+import { logger } from "../utils/logger.js";
 
 // Re-export decay multiplier helper for convenience
 export { getDecayMultiplier } from "../expertise/decay.js";
+
+/** Default scratchpad TTL: 1 hour in milliseconds. */
+const DEFAULT_SCRATCHPAD_TTL_MS = 3_600_000;
+
+/** Tier weight multipliers for search scoring. */
+const TIER_MULTIPLIER: Record<string, number> = {
+	"long-term": 1.3,
+	"working": 1.0,
+	"scratchpad": 0.7,
+};
+
+/** Promotion result returned by promoteTiers(). */
+export type TierPromotionResult = {
+	scratchpadToWorking: number;
+	workingToLongTerm: number;
+};
+
+/** Tier statistics returned by getTierStats(). */
+export type TierStats = {
+	scratchpad: number;
+	working: number;
+	longTerm: number;
+	total: number;
+};
+
+/**
+ * Compute the promotion score for a knowledge entry.
+ * promotionScore = referenceCount * 0.4 + confidence * 0.4 + (strength > 0.7 ? 0.2 : 0)
+ */
+function computePromotionScore(
+	referenceCount: number,
+	confidence: number,
+	strength: number,
+): number {
+	return referenceCount * 0.4 + confidence * 0.4 + (strength > 0.7 ? 0.2 : 0);
+}
 
 const KnowledgeEntrySchema = z.object({
 	id: z.string(),
@@ -37,6 +79,17 @@ const KnowledgeEntrySchema = z.object({
 	lastReferencedAt: z.number().default(() => Date.now()),
 	/** Number of times this entry has been referenced. */
 	referenceCount: z.number().int().min(0).default(0),
+	// -----------------------------------------------------------------------
+	// Memory tier fields (Issue #42)
+	// -----------------------------------------------------------------------
+	/** Memory tier: scratchpad (short-lived) → working → long-term. */
+	tier: z.enum(["scratchpad", "working", "long-term"]).default("scratchpad"),
+	/** Timestamp (ms) when the entry last changed tier. */
+	tierCreatedAt: z.number().default(() => Date.now()),
+	/** Promotion score: referenceCount*0.4 + confidence*0.4 + (strength>0.7?0.2:0). */
+	promotionScore: z.number().default(0),
+	/** Custom TTL (ms) for scratchpad entries. Defaults to DEFAULT_SCRATCHPAD_TTL_MS if not set. */
+	scratchpadTtlMs: z.number().optional(),
 });
 
 export type KnowledgeEntry = z.output<typeof KnowledgeEntrySchema>;
@@ -63,10 +116,22 @@ export class KnowledgeManager {
 	}
 
 	/** Store a new knowledge entry or update existing one. */
-	async upsert(entry: Omit<KnowledgeEntry, "updatedAt">): Promise<void> {
+	async upsert(
+		entry: Omit<KnowledgeEntry, "updatedAt" | "tier" | "tierCreatedAt" | "promotionScore"> &
+			Partial<Pick<KnowledgeEntry, "tier" | "tierCreatedAt" | "promotionScore">>,
+	): Promise<void> {
+		const now = Date.now();
 		const withTimestamp: KnowledgeEntry = {
+			tier: "scratchpad",
 			...entry,
-			updatedAt: Date.now(),
+			updatedAt: now,
+			tierCreatedAt: entry.tierCreatedAt ?? now,
+			// Always recompute promotionScore from live field values
+			promotionScore: computePromotionScore(
+				entry.referenceCount,
+				entry.confidence,
+				entry.strength,
+			),
 		};
 		await this.store.write(entry.id, withTimestamp);
 	}
@@ -79,18 +144,26 @@ export class KnowledgeManager {
 	/**
 	 * Reinforce a single knowledge entry — called when it appears in a prompt.
 	 * Increases strength by REINFORCE_DELTA, updates lastReferencedAt,
-	 * increments referenceCount.
+	 * increments referenceCount, and recalculates promotionScore.
 	 */
 	async reinforce(id: string): Promise<void> {
 		const entry = await this.store.read(id);
 		if (!entry) return;
 
+		const newReferenceCount = entry.referenceCount + 1;
+		const newStrength = computeReinforcedStrength(entry.strength);
+
 		const reinforced: KnowledgeEntry = {
 			...entry,
-			strength: computeReinforcedStrength(entry.strength),
+			strength: newStrength,
 			lastReferencedAt: Date.now(),
-			referenceCount: entry.referenceCount + 1,
+			referenceCount: newReferenceCount,
 			updatedAt: Date.now(),
+			promotionScore: computePromotionScore(
+				newReferenceCount,
+				entry.confidence,
+				newStrength,
+			),
 		};
 		await this.store.write(id, reinforced);
 	}
@@ -123,6 +196,11 @@ export class KnowledgeManager {
 					...entry,
 					strength: decayedStrength,
 					updatedAt: Date.now(),
+					promotionScore: computePromotionScore(
+						entry.referenceCount,
+						entry.confidence,
+						decayedStrength,
+					),
 				};
 				await this.store.write(entry.id, updated);
 			}
@@ -166,7 +244,7 @@ export class KnowledgeManager {
 			.slice(0, limit);
 	}
 
-	/** Search knowledge by keyword matching (simple substring search). */
+	/** Search knowledge by keyword matching with tier-priority weighting. */
 	async search(query: string, limit = 10): Promise<KnowledgeEntry[]> {
 		const all = await this.store.readAll();
 		const queryLower = query.toLowerCase();
@@ -174,7 +252,7 @@ export class KnowledgeManager {
 		const scored = all
 			.map(({ value }) => ({
 				entry: value,
-				score: computeRelevance(value, queryLower),
+				score: computeRelevanceWithTier(value, queryLower),
 			}))
 			.filter(
 				({ score, entry }) =>
@@ -199,6 +277,174 @@ export class KnowledgeManager {
 		return all
 			.map((e) => e.value)
 			.filter((e) => e.topic.toLowerCase().trim() === topicLower);
+	}
+
+	// -------------------------------------------------------------------------
+	// Memory tier management (Issue #42)
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Expire scratchpad entries whose TTL has elapsed.
+	 * Entries eligible for promotion are promoted instead of deleted.
+	 * @returns Number of entries deleted (not counting promoted ones).
+	 */
+	async expireScratchpad(): Promise<number> {
+		const all = await this.store.readAll();
+		const now = Date.now();
+		let removed = 0;
+
+		for (const { value: entry } of all) {
+			if (entry.tier !== "scratchpad") continue;
+
+			const ttl = entry.scratchpadTtlMs ?? DEFAULT_SCRATCHPAD_TTL_MS;
+			const age = now - entry.tierCreatedAt;
+			if (age <= ttl) continue;
+
+			// Check if eligible for promotion before deleting
+			const eligibleForWorking =
+				entry.referenceCount >= 2 || entry.confidence >= 0.85;
+
+			if (eligibleForWorking) {
+				// Promote to working instead of deleting
+				const promoted: KnowledgeEntry = {
+					...entry,
+					tier: "working",
+					tierCreatedAt: now,
+					updatedAt: now,
+					promotionScore: computePromotionScore(
+						entry.referenceCount,
+						entry.confidence,
+						entry.strength,
+					),
+				};
+				await this.store.write(entry.id, promoted);
+				logger.debug("Scratchpad entry promoted to working (TTL expired)", {
+					id: entry.id,
+					topic: entry.topic,
+				});
+			} else {
+				await this.store.delete(entry.id);
+				removed++;
+				logger.debug("Scratchpad entry expired and deleted", {
+					id: entry.id,
+					topic: entry.topic,
+					ageMs: age,
+				});
+			}
+		}
+
+		return removed;
+	}
+
+	/**
+	 * Evaluate all entries for tier promotion based on promotion rules:
+	 * - scratchpad → working: referenceCount >= 2 OR confidence >= 0.85
+	 * - working → long-term: referenceCount >= 5 AND confidence >= 0.8
+	 * @returns Counts of promotions per tier transition.
+	 */
+	async promoteTiers(): Promise<TierPromotionResult> {
+		const all = await this.store.readAll();
+		const now = Date.now();
+		let scratchpadToWorking = 0;
+		let workingToLongTerm = 0;
+
+		for (const { value: entry } of all) {
+			if (entry.tier === "scratchpad") {
+				const eligible =
+					entry.referenceCount >= 2 || entry.confidence >= 0.85;
+				if (!eligible) continue;
+
+				const promoted: KnowledgeEntry = {
+					...entry,
+					tier: "working",
+					tierCreatedAt: now,
+					updatedAt: now,
+					promotionScore: computePromotionScore(
+						entry.referenceCount,
+						entry.confidence,
+						entry.strength,
+					),
+				};
+				await this.store.write(entry.id, promoted);
+				scratchpadToWorking++;
+				logger.debug("Promoted scratchpad → working", {
+					id: entry.id,
+					topic: entry.topic,
+					referenceCount: entry.referenceCount,
+					confidence: entry.confidence,
+				});
+			} else if (entry.tier === "working") {
+				const eligible =
+					entry.referenceCount >= 5 && entry.confidence >= 0.8;
+				if (!eligible) continue;
+
+				const promoted: KnowledgeEntry = {
+					...entry,
+					tier: "long-term",
+					tierCreatedAt: now,
+					updatedAt: now,
+					promotionScore: computePromotionScore(
+						entry.referenceCount,
+						entry.confidence,
+						entry.strength,
+					),
+				};
+				await this.store.write(entry.id, promoted);
+				workingToLongTerm++;
+				logger.debug("Promoted working → long-term", {
+					id: entry.id,
+					topic: entry.topic,
+					referenceCount: entry.referenceCount,
+					confidence: entry.confidence,
+				});
+			}
+		}
+
+		return { scratchpadToWorking, workingToLongTerm };
+	}
+
+	/**
+	 * Run full tier maintenance cycle:
+	 * 1. Expire TTL-elapsed scratchpad entries (promoting eligible ones)
+	 * 2. Promote entries meeting promotion criteria
+	 * Intended to be called by the memory-tier-maintenance cron job.
+	 */
+	async runTierMaintenance(): Promise<{
+		expired: number;
+		scratchpadToWorking: number;
+		workingToLongTerm: number;
+	}> {
+		const expired = await this.expireScratchpad();
+		const { scratchpadToWorking, workingToLongTerm } = await this.promoteTiers();
+		return { expired, scratchpadToWorking, workingToLongTerm };
+	}
+
+	/**
+	 * Get tier statistics for monitoring and logging.
+	 * @returns Counts of entries per tier and total.
+	 */
+	async getTierStats(): Promise<TierStats> {
+		const all = await this.store.readAll();
+		const stats: TierStats = {
+			scratchpad: 0,
+			working: 0,
+			longTerm: 0,
+			total: 0,
+		};
+
+		for (const { value: entry } of all) {
+			stats.total++;
+			if (entry.tier === "long-term") {
+				stats.longTerm++;
+			} else if (entry.tier === "working") {
+				stats.working++;
+			} else {
+				// "scratchpad" or any defaulted value
+				stats.scratchpad++;
+			}
+		}
+
+		return stats;
 	}
 
 	/**
@@ -235,7 +481,11 @@ function renderStrengthBar(strength: number): string {
 	return `[강도: ${"█".repeat(filled)}${"░".repeat(empty)}]`;
 }
 
-function computeRelevance(entry: KnowledgeEntry, queryLower: string): number {
+/**
+ * Compute relevance score with tier-priority weighting.
+ * Applies tier multipliers: long-term(×1.3), working(×1.0), scratchpad(×0.7)
+ */
+function computeRelevanceWithTier(entry: KnowledgeEntry, queryLower: string): number {
 	let score = 0;
 	const topicLower = entry.topic.toLowerCase();
 	const contentLower = entry.content.toLowerCase();
@@ -250,6 +500,10 @@ function computeRelevance(entry: KnowledgeEntry, queryLower: string): number {
 
 	// Boost by confidence and strength
 	score *= entry.confidence * entry.strength;
+
+	// Apply tier multiplier
+	const tierMultiplier = TIER_MULTIPLIER[entry.tier] ?? 1.0;
+	score *= tierMultiplier;
 
 	return score;
 }
