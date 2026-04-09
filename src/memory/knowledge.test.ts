@@ -2,7 +2,7 @@
  * Tests for KnowledgeManager — forgetting curve integration.
  * Covers: reinforce, applyDecayAll, archiveWeak, listFading,
  * backward compatibility with entries missing new fields,
- * and strength-weighted search.
+ * strength-weighted search, and memory tier management (Issue #42).
  */
 
 import { randomUUID } from "node:crypto";
@@ -32,6 +32,10 @@ function makeEntry(overrides: Partial<KnowledgeEntry> = {}): KnowledgeEntry {
 		strength: 1.0,
 		lastReferencedAt: now,
 		referenceCount: 0,
+		// Tier fields (Issue #42)
+		tier: "scratchpad",
+		tierCreatedAt: now,
+		promotionScore: 0,
 		...overrides,
 	};
 }
@@ -389,6 +393,455 @@ describe("KnowledgeManager", () => {
 			expect(result).not.toBeNull();
 			// Should contain some kind of strength indicator
 			expect(result?.text).toContain("Node.js async");
+		});
+	});
+
+	// -----------------------------------------------------------------------
+	// Memory Tier (Issue #42)
+	// -----------------------------------------------------------------------
+
+	describe("memory tier", () => {
+		// -------------------------------------------------------------------
+		// Default tier assignment
+		// -------------------------------------------------------------------
+
+		describe("default tier assignment", () => {
+			it("assigns 'scratchpad' tier by default when not specified", async () => {
+				const entry = makeEntry();
+				await manager.upsert(entry);
+
+				const stored = await manager.get(entry.id);
+				expect(stored?.tier).toBe("scratchpad");
+			});
+
+			it("preserves explicitly assigned tier", async () => {
+				const entry = makeEntry({ tier: "working" });
+				await manager.upsert(entry);
+
+				const stored = await manager.get(entry.id);
+				expect(stored?.tier).toBe("working");
+			});
+
+			it("sets tierCreatedAt on upsert", async () => {
+				const before = Date.now();
+				const entry = makeEntry();
+				await manager.upsert(entry);
+				const after = Date.now();
+
+				const stored = await manager.get(entry.id);
+				expect(stored?.tierCreatedAt).toBeGreaterThanOrEqual(before);
+				expect(stored?.tierCreatedAt).toBeLessThanOrEqual(after);
+			});
+
+			it("computes promotionScore on upsert", async () => {
+				const entry = makeEntry({
+					referenceCount: 3,
+					confidence: 0.8,
+					strength: 0.8,
+				});
+				await manager.upsert(entry);
+
+				const stored = await manager.get(entry.id);
+				// promotionScore = 3*0.4 + 0.8*0.4 + 0.2 = 1.2 + 0.32 + 0.2 = 1.72
+				expect(stored?.promotionScore).toBeGreaterThan(0);
+			});
+		});
+
+		// -------------------------------------------------------------------
+		// Backward compatibility with entries missing tier fields
+		// -------------------------------------------------------------------
+
+		describe("backward compatibility for tier fields", () => {
+			it("reads old entries without tier fields and defaults to 'scratchpad'", async () => {
+				const id = randomUUID();
+				const oldEntry = {
+					id,
+					topic: "old topic without tier",
+					content: "content",
+					source: "taught",
+					createdAt: Date.now(),
+					updatedAt: Date.now(),
+					confidence: 0.8,
+					tags: [],
+					strength: 1.0,
+					lastReferencedAt: Date.now(),
+					referenceCount: 0,
+				};
+				const safeName = id.replace(/[^a-zA-Z0-9_-]/g, "_");
+				await writeFile(
+					join(memoryDir, `${safeName}.json`),
+					JSON.stringify(oldEntry, null, 2),
+					"utf8",
+				);
+
+				const read = await manager.get(id);
+				expect(read).not.toBeNull();
+				expect(read?.tier).toBe("scratchpad");
+				expect(read?.tierCreatedAt).toBeDefined();
+				expect(read?.promotionScore).toBeGreaterThanOrEqual(0);
+			});
+		});
+
+		// -------------------------------------------------------------------
+		// promotionScore calculation
+		// -------------------------------------------------------------------
+
+		describe("computePromotionScore", () => {
+			it("returns higher score for high referenceCount + confidence + strength", async () => {
+				const highScore = makeEntry({
+					referenceCount: 10,
+					confidence: 0.9,
+					strength: 0.9,
+				});
+				const lowScore = makeEntry({
+					referenceCount: 0,
+					confidence: 0.5,
+					strength: 0.3,
+				});
+
+				await manager.upsert(highScore);
+				await manager.upsert(lowScore);
+
+				const h = await manager.get(highScore.id);
+				const l = await manager.get(lowScore.id);
+				expect(h!.promotionScore).toBeGreaterThan(l!.promotionScore);
+			});
+
+			it("adds 0.2 bonus when strength > 0.7", async () => {
+				const withBonus = makeEntry({ referenceCount: 0, confidence: 0.5, strength: 0.8 });
+				const withoutBonus = makeEntry({ referenceCount: 0, confidence: 0.5, strength: 0.5 });
+
+				await manager.upsert(withBonus);
+				await manager.upsert(withoutBonus);
+
+				const wb = await manager.get(withBonus.id);
+				const wob = await manager.get(withoutBonus.id);
+				// Difference should be ~0.2
+				expect(wb!.promotionScore - wob!.promotionScore).toBeCloseTo(0.2, 5);
+			});
+		});
+
+		// -------------------------------------------------------------------
+		// scratchpad TTL expiry
+		// -------------------------------------------------------------------
+
+		describe("scratchpad TTL expiry (expireScratchpad)", () => {
+			it("deletes scratchpad entries whose TTL has expired", async () => {
+				const expired = makeEntry({
+					tier: "scratchpad",
+					tierCreatedAt: Date.now() - 2 * 3_600_000, // 2 hours ago
+					scratchpadTtlMs: 3_600_000, // 1 hour TTL
+				});
+				await manager.upsert(expired);
+
+				const removed = await manager.expireScratchpad();
+
+				expect(removed).toBe(1);
+				expect(await manager.get(expired.id)).toBeNull();
+			});
+
+			it("keeps scratchpad entries whose TTL has not expired", async () => {
+				const fresh = makeEntry({
+					tier: "scratchpad",
+					tierCreatedAt: Date.now() - 1_000, // 1 second ago
+					scratchpadTtlMs: 3_600_000, // 1 hour TTL
+				});
+				await manager.upsert(fresh);
+
+				const removed = await manager.expireScratchpad();
+
+				expect(removed).toBe(0);
+				expect(await manager.get(fresh.id)).not.toBeNull();
+			});
+
+			it("does not delete working or long-term entries", async () => {
+				const working = makeEntry({
+					tier: "working",
+					tierCreatedAt: Date.now() - 999_999_999,
+				});
+				const longTerm = makeEntry({
+					tier: "long-term",
+					tierCreatedAt: Date.now() - 999_999_999,
+				});
+				await manager.upsert(working);
+				await manager.upsert(longTerm);
+
+				const removed = await manager.expireScratchpad();
+
+				expect(removed).toBe(0);
+				expect(await manager.get(working.id)).not.toBeNull();
+				expect(await manager.get(longTerm.id)).not.toBeNull();
+			});
+
+			it("promotes eligible scratchpad entries before expiring them", async () => {
+				// Entry eligible for promotion (referenceCount >= 2)
+				const promotable = makeEntry({
+					tier: "scratchpad",
+					tierCreatedAt: Date.now() - 2 * 3_600_000,
+					scratchpadTtlMs: 3_600_000,
+					referenceCount: 3, // >= 2, eligible for working
+					confidence: 0.7,
+				});
+				await manager.upsert(promotable);
+
+				const removed = await manager.expireScratchpad();
+
+				// Should NOT be deleted — was promoted instead
+				expect(removed).toBe(0);
+				const stored = await manager.get(promotable.id);
+				expect(stored?.tier).toBe("working");
+			});
+		});
+
+		// -------------------------------------------------------------------
+		// Tier promotion
+		// -------------------------------------------------------------------
+
+		describe("promoteTiers", () => {
+			it("promotes scratchpad → working when referenceCount >= 2", async () => {
+				const entry = makeEntry({
+					tier: "scratchpad",
+					referenceCount: 2,
+					confidence: 0.6,
+				});
+				await manager.upsert(entry);
+
+				const result = await manager.promoteTiers();
+
+				expect(result.scratchpadToWorking).toBe(1);
+				const stored = await manager.get(entry.id);
+				expect(stored?.tier).toBe("working");
+			});
+
+			it("promotes scratchpad → working when confidence >= 0.85", async () => {
+				const entry = makeEntry({
+					tier: "scratchpad",
+					referenceCount: 0,
+					confidence: 0.9,
+				});
+				await manager.upsert(entry);
+
+				const result = await manager.promoteTiers();
+
+				expect(result.scratchpadToWorking).toBe(1);
+				const stored = await manager.get(entry.id);
+				expect(stored?.tier).toBe("working");
+			});
+
+			it("does NOT promote scratchpad when conditions not met", async () => {
+				const entry = makeEntry({
+					tier: "scratchpad",
+					referenceCount: 1,
+					confidence: 0.7,
+				});
+				await manager.upsert(entry);
+
+				const result = await manager.promoteTiers();
+
+				expect(result.scratchpadToWorking).toBe(0);
+				const stored = await manager.get(entry.id);
+				expect(stored?.tier).toBe("scratchpad");
+			});
+
+			it("promotes working → long-term when referenceCount >= 5 AND confidence >= 0.8", async () => {
+				const entry = makeEntry({
+					tier: "working",
+					referenceCount: 5,
+					confidence: 0.8,
+				});
+				await manager.upsert(entry);
+
+				const result = await manager.promoteTiers();
+
+				expect(result.workingToLongTerm).toBe(1);
+				const stored = await manager.get(entry.id);
+				expect(stored?.tier).toBe("long-term");
+			});
+
+			it("does NOT promote working → long-term when referenceCount < 5", async () => {
+				const entry = makeEntry({
+					tier: "working",
+					referenceCount: 4,
+					confidence: 0.9,
+				});
+				await manager.upsert(entry);
+
+				const result = await manager.promoteTiers();
+
+				expect(result.workingToLongTerm).toBe(0);
+				expect((await manager.get(entry.id))?.tier).toBe("working");
+			});
+
+			it("does NOT promote working → long-term when confidence < 0.8", async () => {
+				const entry = makeEntry({
+					tier: "working",
+					referenceCount: 10,
+					confidence: 0.79,
+				});
+				await manager.upsert(entry);
+
+				const result = await manager.promoteTiers();
+
+				expect(result.workingToLongTerm).toBe(0);
+				expect((await manager.get(entry.id))?.tier).toBe("working");
+			});
+
+			it("updates tierCreatedAt when promoting", async () => {
+				const oldTierCreatedAt = Date.now() - 5_000;
+				const entry = makeEntry({
+					tier: "scratchpad",
+					tierCreatedAt: oldTierCreatedAt,
+					referenceCount: 2,
+					confidence: 0.7,
+				});
+				await manager.upsert(entry);
+
+				const before = Date.now();
+				await manager.promoteTiers();
+				const after = Date.now();
+
+				const stored = await manager.get(entry.id);
+				expect(stored?.tierCreatedAt).toBeGreaterThanOrEqual(before);
+				expect(stored?.tierCreatedAt).toBeLessThanOrEqual(after);
+			});
+
+			it("returns correct counts for multiple promotions", async () => {
+				const sp1 = makeEntry({ tier: "scratchpad", referenceCount: 3, confidence: 0.7 });
+				const sp2 = makeEntry({ tier: "scratchpad", referenceCount: 0, confidence: 0.9 });
+				const sp3 = makeEntry({ tier: "scratchpad", referenceCount: 0, confidence: 0.5 }); // no promotion
+				const wk1 = makeEntry({ tier: "working", referenceCount: 6, confidence: 0.85 });
+				const wk2 = makeEntry({ tier: "working", referenceCount: 2, confidence: 0.9 }); // no promotion
+
+				for (const e of [sp1, sp2, sp3, wk1, wk2]) {
+					await manager.upsert(e);
+				}
+
+				const result = await manager.promoteTiers();
+
+				expect(result.scratchpadToWorking).toBe(2);
+				expect(result.workingToLongTerm).toBe(1);
+			});
+		});
+
+		// -------------------------------------------------------------------
+		// Retrieval tier priority (search with tier weighting)
+		// -------------------------------------------------------------------
+
+		describe("search with tier priority weighting", () => {
+			it("ranks long-term > working > scratchpad for equal relevance", async () => {
+				const longTerm = makeEntry({
+					topic: "golang concurrency",
+					content: "goroutines and channels",
+					tier: "long-term",
+					strength: 0.8,
+					confidence: 0.8,
+				});
+				const working = makeEntry({
+					topic: "golang concurrency",
+					content: "goroutines and channels",
+					tier: "working",
+					strength: 0.8,
+					confidence: 0.8,
+				});
+				const scratchpad = makeEntry({
+					topic: "golang concurrency",
+					content: "goroutines and channels",
+					tier: "scratchpad",
+					strength: 0.8,
+					confidence: 0.8,
+				});
+
+				await manager.upsert(longTerm);
+				await manager.upsert(working);
+				await manager.upsert(scratchpad);
+
+				const results = await manager.search("golang concurrency", 10);
+
+				const ids = results.map((r) => r.id);
+				expect(ids.indexOf(longTerm.id)).toBeLessThan(ids.indexOf(working.id));
+				expect(ids.indexOf(working.id)).toBeLessThan(ids.indexOf(scratchpad.id));
+			});
+
+			it("applies tier multiplier: long-term 1.3x, working 1.0x, scratchpad 0.7x", async () => {
+				// long-term with lower raw score should beat scratchpad with higher raw score
+				// if the tier multiplier compensates
+				const ltEntry = makeEntry({
+					topic: "python testing",
+					content: "pytest fixtures",
+					tier: "long-term",
+					strength: 0.5,  // lower strength
+					confidence: 0.6,
+				});
+				const spEntry = makeEntry({
+					topic: "python testing",
+					content: "pytest fixtures",
+					tier: "scratchpad",
+					strength: 0.5,
+					confidence: 0.6,
+				});
+
+				await manager.upsert(ltEntry);
+				await manager.upsert(spEntry);
+
+				const results = await manager.search("python testing", 10);
+				const ids = results.map((r) => r.id);
+				// long-term should appear before scratchpad
+				expect(ids.indexOf(ltEntry.id)).toBeLessThan(ids.indexOf(spEntry.id));
+			});
+		});
+
+		// -------------------------------------------------------------------
+		// getTierStats
+		// -------------------------------------------------------------------
+
+		describe("getTierStats", () => {
+			it("returns zero counts when store is empty", async () => {
+				const stats = await manager.getTierStats();
+				expect(stats.scratchpad).toBe(0);
+				expect(stats.working).toBe(0);
+				expect(stats.longTerm).toBe(0);
+				expect(stats.total).toBe(0);
+			});
+
+			it("counts entries per tier correctly", async () => {
+				await manager.upsert(makeEntry({ tier: "scratchpad" }));
+				await manager.upsert(makeEntry({ tier: "scratchpad" }));
+				await manager.upsert(makeEntry({ tier: "working" }));
+				await manager.upsert(makeEntry({ tier: "long-term" }));
+
+				const stats = await manager.getTierStats();
+				expect(stats.scratchpad).toBe(2);
+				expect(stats.working).toBe(1);
+				expect(stats.longTerm).toBe(1);
+				expect(stats.total).toBe(4);
+			});
+
+			it("includes entries missing tier field (defaulted to scratchpad) in scratchpad count", async () => {
+				// Write an entry without tier field directly
+				const id = randomUUID();
+				const oldEntry = {
+					id,
+					topic: "tier-less entry",
+					content: "no tier field",
+					source: "taught",
+					createdAt: Date.now(),
+					updatedAt: Date.now(),
+					confidence: 0.8,
+					tags: [],
+					strength: 1.0,
+					lastReferencedAt: Date.now(),
+					referenceCount: 0,
+				};
+				const safeName = id.replace(/[^a-zA-Z0-9_-]/g, "_");
+				await writeFile(
+					join(memoryDir, `${safeName}.json`),
+					JSON.stringify(oldEntry, null, 2),
+					"utf8",
+				);
+
+				const stats = await manager.getTierStats();
+				expect(stats.scratchpad).toBe(1);
+			});
 		});
 	});
 });
